@@ -732,3 +732,124 @@ describe('readStdinCache — env-less reader fallback to most recent session cac
     expect(readStdinCache()?.transcript_path).toBe('/tmp/mine.jsonl');
   });
 });
+
+describe('writeStdinCache — stdin.session_id fallback for concurrent sessions without env vars', () => {
+  let tmpRoot: string;
+  let originalCwd: string;
+  const envKeys = ['CLAUDE_SESSION_ID', 'CLAUDECODE_SESSION_ID'] as const;
+  const savedEnv: Partial<Record<(typeof envKeys)[number], string | undefined>> = {};
+
+  beforeEach(() => {
+    tmpRoot = mkdtempSync(join(tmpdir(), 'omc-hud-stdin-session-id-'));
+    execSync('git init --quiet', { cwd: tmpRoot });
+    originalCwd = process.cwd();
+    process.chdir(tmpRoot);
+    for (const key of envKeys) {
+      savedEnv[key] = process.env[key];
+      delete process.env[key];
+    }
+  });
+
+  afterEach(() => {
+    process.chdir(originalCwd);
+    for (const key of envKeys) {
+      if (savedEnv[key] === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = savedEnv[key];
+      }
+    }
+    rmSync(tmpRoot, { recursive: true, force: true });
+  });
+
+  it('uses stdin.session_id to scope the cache when env vars are absent', () => {
+    const stdin = makeStdin({ session_id: 'client-session-xyz', transcript_path: `${tmpRoot}/xyz.jsonl` });
+    writeStdinCache(stdin);
+
+    const expected = join(tmpRoot, '.omc', 'state', 'sessions', 'client-session-xyz', 'hud-stdin-cache.json');
+    expect(existsSync(expected)).toBe(true);
+    const loaded = JSON.parse(readFileSync(expected, 'utf-8')) as StatuslineStdin;
+    expect(loaded.session_id).toBe('client-session-xyz');
+  });
+
+  it('prevents two concurrent sessions from clobbering each other when using stdin.session_id', () => {
+    // Simulate two concurrent HUD renders without env vars set,
+    // each carrying its own session_id in stdin.
+    const alpha = makeStdin({ session_id: 'alpha', transcript_path: `${tmpRoot}/alpha.jsonl` });
+    writeStdinCache(alpha);
+
+    const beta = makeStdin({ session_id: 'beta', transcript_path: `${tmpRoot}/beta.jsonl` });
+    writeStdinCache(beta);
+
+    // Each session must have its own cache file.
+    const alphaCached = join(tmpRoot, '.omc', 'state', 'sessions', 'alpha', 'hud-stdin-cache.json');
+    const betaCached = join(tmpRoot, '.omc', 'state', 'sessions', 'beta', 'hud-stdin-cache.json');
+    expect(existsSync(alphaCached)).toBe(true);
+    expect(existsSync(betaCached)).toBe(true);
+
+    // Flat path must be empty (neither session fell back to it).
+    const flatPath = join(tmpRoot, '.omc', 'state', 'hud-stdin-cache.json');
+    expect(existsSync(flatPath)).toBe(false);
+
+    // Each cache must contain the correct session's data.
+    expect(JSON.parse(readFileSync(alphaCached, 'utf-8')).transcript_path).toBe(`${tmpRoot}/alpha.jsonl`);
+    expect(JSON.parse(readFileSync(betaCached, 'utf-8')).transcript_path).toBe(`${tmpRoot}/beta.jsonl`);
+  });
+
+  it('falls back to the flat path when stdin.session_id is missing', () => {
+    const stdin = makeStdin({ transcript_path: `${tmpRoot}/no-session.jsonl` });
+    // session_id is undefined
+    writeStdinCache(stdin);
+
+    const flatPath = join(tmpRoot, '.omc', 'state', 'hud-stdin-cache.json');
+    expect(existsSync(flatPath)).toBe(true);
+    const loaded = JSON.parse(readFileSync(flatPath, 'utf-8')) as StatuslineStdin;
+    expect(loaded.transcript_path).toBe(`${tmpRoot}/no-session.jsonl`);
+  });
+
+  it('prefers env var over stdin.session_id', () => {
+    process.env.CLAUDE_SESSION_ID = 'env-session';
+    const stdin = makeStdin({ session_id: 'stdin-session', transcript_path: `${tmpRoot}/test.jsonl` });
+    writeStdinCache(stdin);
+
+    // Must use env var, not stdin.session_id.
+    const envPath = join(tmpRoot, '.omc', 'state', 'sessions', 'env-session', 'hud-stdin-cache.json');
+    expect(existsSync(envPath)).toBe(true);
+
+    // stdin-session directory must not exist.
+    const stdinPath = join(tmpRoot, '.omc', 'state', 'sessions', 'stdin-session');
+    expect(existsSync(stdinPath)).toBe(false);
+  });
+
+  it('handles invalid stdin.session_id gracefully by falling back to flat path', () => {
+    const invalidStdin = makeStdin({
+      session_id: '../../../etc/passwd',
+      transcript_path: `${tmpRoot}/invalid.jsonl`,
+    });
+    writeStdinCache(invalidStdin);
+
+    // Must not escape the state dir and must not create a sessions directory.
+    const sessionsDir = join(tmpRoot, '.omc', 'state', 'sessions');
+    expect(existsSync(sessionsDir)).toBe(false);
+
+    // Must fall back to the flat path.
+    const flatPath = join(tmpRoot, '.omc', 'state', 'hud-stdin-cache.json');
+    expect(existsSync(flatPath)).toBe(true);
+  });
+
+  it('skips writes when content is unchanged to preserve mtime', () => {
+    const { statSync } = require('fs');
+    const stdin = makeStdin({ session_id: 'mtime-test', transcript_path: `${tmpRoot}/test.jsonl` });
+    writeStdinCache(stdin);
+
+    const cachePath = join(tmpRoot, '.omc', 'state', 'sessions', 'mtime-test', 'hud-stdin-cache.json');
+    const stat1 = statSync(cachePath);
+
+    // Write the same content again immediately; mtime should not change.
+    writeStdinCache(stdin);
+    const stat2 = statSync(cachePath);
+
+    // mtime should be unchanged because writeStdinCache skipped the write.
+    expect(stat2.mtimeMs).toBe(stat1.mtimeMs);
+  });
+});
