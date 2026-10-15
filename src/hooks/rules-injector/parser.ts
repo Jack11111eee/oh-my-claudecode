@@ -142,8 +142,7 @@ function parseArrayOrStringValue(
   // Case 3: Comma-separated patterns in single string
   const stringValue = parseStringValue(rawValue);
   if (stringValue.includes(',')) {
-    const items = stringValue
-      .split(',')
+    const items = splitOutsideBraces(stringValue)
       .map((s) => s.trim())
       .filter((s) => s.length > 0);
     return { value: items, consumed: 1 };
@@ -151,6 +150,33 @@ function parseArrayOrStringValue(
 
   // Case 4: Single string value
   return { value: stringValue, consumed: 1 };
+}
+
+/**
+ * Split on commas that are not inside a `{...}` brace group, so a glob such as
+ * `src/**\/*.{ts,tsx}` stays one pattern while `a/*.ts, b/*.ts` still splits.
+ */
+function splitOutsideBraces(value: string): string[] {
+  const items: string[] = [];
+  let current = '';
+  let depth = 0;
+  for (let i = 0; i < value.length; i++) {
+    const char = value[i];
+    if (char === '\\' && i + 1 < value.length) {
+      current += char + value[++i];
+      continue;
+    }
+    if (char === '{') depth++;
+    else if (char === '}' && depth > 0) depth--;
+    if (char === ',' && depth === 0) {
+      items.push(current);
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  items.push(current);
+  return items;
 }
 
 /**
@@ -166,6 +192,7 @@ function parseInlineArray(value: string): string[] {
   let current = '';
   let inQuote = false;
   let quoteChar = '';
+  let braceDepth = 0;
 
   for (let i = 0; i < content.length; i++) {
     const char = content[i];
@@ -176,7 +203,13 @@ function parseInlineArray(value: string): string[] {
     } else if (inQuote && char === quoteChar) {
       inQuote = false;
       quoteChar = '';
-    } else if (!inQuote && char === ',') {
+    } else if (!inQuote && char === '{') {
+      braceDepth++;
+      current += char;
+    } else if (!inQuote && char === '}' && braceDepth > 0) {
+      braceDepth--;
+      current += char;
+    } else if (!inQuote && braceDepth === 0 && char === ',') {
       const trimmed = current.trim();
       if (trimmed) {
         items.push(parseStringValue(trimmed));

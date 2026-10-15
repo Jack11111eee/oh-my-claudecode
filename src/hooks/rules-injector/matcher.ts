@@ -16,11 +16,70 @@ import type { RuleMetadata, MatchResult } from './types.js';
  *
  * `*` stays within one path segment, `**\/` matches zero or more directories
  * (so `**\/*.py` also matches `main.py`), and a bare `**` matches anything.
- * Other regex metacharacters are literal path characters, except `[...]`,
- * which stays a character class as in other glob dialects, and `\X`, which
- * is a literal X.
+ * `{a,b}` is brace alternation (see expandBraces). Other regex
+ * metacharacters are literal path characters, except `[...]`, which stays a
+ * character class as in other glob dialects, and `\X`, which is a literal X.
  */
 function matchGlob(pattern: string, filePath: string): boolean {
+  return expandBraces(pattern).some((expanded) => matchExpandedGlob(expanded, filePath));
+}
+
+/** Upper bound on alternatives one glob may expand to (guards `{a,b}{c,d}...`). */
+const MAX_BRACE_EXPANSIONS = 256;
+
+/**
+ * Expand `{a,b}` alternation into one pattern per alternative, e.g.
+ * `src/**\/*.{ts,tsx}` -> [`src/**\/*.ts`, `src/**\/*.tsx`]. Braces nest, `\{`
+ * stays literal, and a brace group without a comma (or without a closing
+ * brace) is left as literal text so paths like `app/{id}/page.tsx` still match.
+ */
+function expandBraces(pattern: string, from = 0): string[] {
+  for (let i = from; i < pattern.length; i++) {
+    if (pattern[i] === '\\') {
+      i++;
+      continue;
+    }
+    if (pattern[i] !== '{') continue;
+
+    const parts: string[] = [];
+    let depth = 0;
+    let start = i + 1;
+    let end = -1;
+    for (let j = i + 1; j < pattern.length; j++) {
+      const c = pattern[j];
+      if (c === '\\') {
+        j++;
+      } else if (c === '{') {
+        depth++;
+      } else if (c === '}') {
+        if (depth === 0) {
+          end = j;
+          break;
+        }
+        depth--;
+      } else if (c === ',' && depth === 0) {
+        parts.push(pattern.slice(start, j));
+        start = j + 1;
+      }
+    }
+    if (end === -1 || parts.length === 0) continue;
+
+    parts.push(pattern.slice(start, end));
+    const prefix = pattern.slice(0, i);
+    const suffix = pattern.slice(end + 1);
+    const expanded: string[] = [];
+    for (const part of parts) {
+      for (const alternative of expandBraces(prefix + part + suffix, i)) {
+        expanded.push(alternative);
+        if (expanded.length >= MAX_BRACE_EXPANSIONS) return expanded;
+      }
+    }
+    return expanded;
+  }
+  return [pattern];
+}
+
+function matchExpandedGlob(pattern: string, filePath: string): boolean {
   let regexStr = '';
   for (let i = 0; i < pattern.length; i++) {
     const ch = pattern[i];

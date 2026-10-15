@@ -55,3 +55,20 @@ describe('parseRuleFrontmatter line endings', () => {
     expect(metadata.globs).toEqual(['*.md']);
   });
 });
+
+describe('parseRuleFrontmatter brace globs', () => {
+  const parseGlobs = (line: string) => parseRuleFrontmatter(`---\n${line}\n---\nbody`).metadata.globs;
+
+  it('keeps commas inside braces in a bare string value', () => {
+    expect(parseGlobs('paths: src/**/*.{ts,tsx}')).toEqual(['src/**/*.{ts,tsx}']);
+  });
+
+  it('still splits comma-separated patterns outside braces', () => {
+    expect(parseGlobs('globs: a/*.{ts,tsx}, b/*.md')).toEqual(['a/*.{ts,tsx}', 'b/*.md']);
+    expect(parseGlobs('globs: **/*.ts,**/*.tsx')).toEqual(['**/*.ts', '**/*.tsx']);
+  });
+
+  it('keeps commas inside braces in an unquoted inline array item', () => {
+    expect(parseGlobs('paths: [src/*.{ts,tsx}, docs/*.md]')).toEqual(['src/*.{ts,tsx}', 'docs/*.md']);
+  });
+});

@@ -66,4 +66,29 @@ describe('shouldApplyRule glob matching', () => {
     expect(applies('lib/[ab].ts', 'lib/a.ts')).toBe(true);
     expect(applies('lib/[ab].ts', 'lib/c.ts')).toBe(false);
   });
+
+  it('expands `{a,b}` brace alternation', () => {
+    expect(applies('**/*.{ts,tsx}', 'src/a/b.tsx')).toBe(true);
+    expect(applies('**/*.{ts,tsx}', 'main.ts')).toBe(true);
+    expect(applies('**/*.{ts,tsx}', 'src/a/b.js')).toBe(false);
+    expect(applies('{src,lib}/**/*.py', 'lib/x/y.py')).toBe(true);
+    expect(applies('{src,lib}/**/*.py', 'test/x/y.py')).toBe(false);
+  });
+
+  it('supports nested and multiple brace groups', () => {
+    expect(applies('src/*.{ts,{js,mjs}}', 'src/a.mjs')).toBe(true);
+    expect(applies('{a,b}/{x,y}.ts', 'b/x.ts')).toBe(true);
+    expect(applies('{a,b}/{x,y}.ts', 'c/x.ts')).toBe(false);
+  });
+
+  it('keeps a brace group without a comma or closing brace literal', () => {
+    expect(applies('app/{id}/page.tsx', 'app/{id}/page.tsx')).toBe(true);
+    expect(applies('app/{id}/page.tsx', 'app/id/page.tsx')).toBe(false);
+    expect(applies('a{b.ts', 'a{b.ts')).toBe(true);
+  });
+
+  it('keeps a backslash-escaped brace literal', () => {
+    expect(applies('a\\{b,c}.ts', 'a{b,c}.ts')).toBe(true);
+    expect(applies('a\\{b,c}.ts', 'ab.ts')).toBe(false);
+  });
 });
