@@ -54,6 +54,7 @@ describe('shouldApplyRule glob matching', () => {
   it('does not throw on a glob that is not a valid regex', () => {
     expect(applies('**/*.c++', 'src/main.c++')).toBe(true);
     expect(applies('**/*.c++', 'src/main.cc')).toBe(false);
+    expect(() => applies('src/[broken', 'src/broken')).not.toThrow();
   });
 
   it('treats a backslash-escaped character as literal', () => {
@@ -65,6 +66,9 @@ describe('shouldApplyRule glob matching', () => {
   it('keeps `[...]` as a character class', () => {
     expect(applies('lib/[ab].ts', 'lib/a.ts')).toBe(true);
     expect(applies('lib/[ab].ts', 'lib/c.ts')).toBe(false);
+    expect(applies('lib/[^ab].ts', 'lib/c.ts')).toBe(true);
+    expect(applies('lib/[^ab].ts', 'lib/a.ts')).toBe(false);
+    expect(applies('lib/[*].ts', 'lib/*.ts')).toBe(true);
   });
 
   it('expands `{a,b}` brace alternation', () => {
@@ -79,6 +83,28 @@ describe('shouldApplyRule glob matching', () => {
     expect(applies('src/*.{ts,{js,mjs}}', 'src/a.mjs')).toBe(true);
     expect(applies('{a,b}/{x,y}.ts', 'b/x.ts')).toBe(true);
     expect(applies('{a,b}/{x,y}.ts', 'c/x.ts')).toBe(false);
+  });
+
+  it('supports empty brace alternatives', () => {
+    expect(applies('src/file{,.ts}', 'src/file')).toBe(true);
+    expect(applies('src/file{,.ts}', 'src/file.ts')).toBe(true);
+    expect(applies('src/*.{ts,tsx,}', 'src/index.')).toBe(true);
+    expect(applies('src/*.{ts,tsx,}', 'src/index.js')).toBe(false);
+  });
+
+  it('keeps regex anchors literal inside brace alternatives', () => {
+    expect(applies('{^README.md,other.md}', 'README.md')).toBe(false);
+    expect(applies('{^README.md,other.md}', '^README.md')).toBe(true);
+  });
+
+  it('bounds expansion depth for pathological numbers of brace groups', () => {
+    const pattern = '{a,b}'.repeat(10_000);
+    expect(() => applies(pattern, 'a'.repeat(10_000))).not.toThrow();
+    expect(applies(pattern, 'a'.repeat(10_000))).toBe(false);
+
+    const nestedPattern = `${'{'.repeat(10_000)}a,b${'}'.repeat(10_000)}`;
+    expect(() => applies(nestedPattern, 'a')).not.toThrow();
+    expect(applies(nestedPattern, 'a')).toBe(false);
   });
 
   it('keeps a brace group without a comma or closing brace literal', () => {

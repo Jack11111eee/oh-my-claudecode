@@ -21,19 +21,24 @@ import type { RuleMetadata, MatchResult } from './types.js';
  * character class as in other glob dialects, and `\X`, which is a literal X.
  */
 function matchGlob(pattern: string, filePath: string): boolean {
-  return expandBraces(pattern).some((expanded) => matchExpandedGlob(expanded, filePath));
+  const expanded = expandBraces(pattern);
+  return expanded !== null && expanded.some((candidate) => matchExpandedGlob(candidate, filePath));
 }
 
 /** Upper bound on alternatives one glob may expand to (guards `{a,b}{c,d}...`). */
 const MAX_BRACE_EXPANSIONS = 256;
+/** Bounds nested and recursive group processing for pathological brace patterns. */
+const MAX_BRACE_DEPTH = 256;
 
 /**
  * Expand `{a,b}` alternation into one pattern per alternative, e.g.
  * `src/**\/*.{ts,tsx}` -> [`src/**\/*.ts`, `src/**\/*.tsx`]. Braces nest, `\{`
  * stays literal, and a brace group without a comma (or without a closing
  * brace) is left as literal text so paths like `app/{id}/page.tsx` still match.
+ * Expansion keeps at most 256 alternatives and rejects patterns deeper than
+ * 256 groups to bound memory, stack use, and work.
  */
-function expandBraces(pattern: string, from = 0): string[] {
+function expandBraces(pattern: string, from = 0, expansionDepth = 0): string[] | null {
   for (let i = from; i < pattern.length; i++) {
     if (pattern[i] === '\\') {
       i++;
@@ -51,6 +56,7 @@ function expandBraces(pattern: string, from = 0): string[] {
         j++;
       } else if (c === '{') {
         depth++;
+        if (depth > MAX_BRACE_DEPTH) return null;
       } else if (c === '}') {
         if (depth === 0) {
           end = j;
@@ -58,18 +64,25 @@ function expandBraces(pattern: string, from = 0): string[] {
         }
         depth--;
       } else if (c === ',' && depth === 0) {
-        parts.push(pattern.slice(start, j));
+        if (parts.length < MAX_BRACE_EXPANSIONS) {
+          parts.push(pattern.slice(start, j));
+        }
         start = j + 1;
       }
     }
     if (end === -1 || parts.length === 0) continue;
+    if (expansionDepth >= MAX_BRACE_DEPTH) return null;
 
-    parts.push(pattern.slice(start, end));
+    if (parts.length < MAX_BRACE_EXPANSIONS) {
+      parts.push(pattern.slice(start, end));
+    }
     const prefix = pattern.slice(0, i);
     const suffix = pattern.slice(end + 1);
     const expanded: string[] = [];
     for (const part of parts) {
-      for (const alternative of expandBraces(prefix + part + suffix, i)) {
+      const alternatives = expandBraces(prefix + part + suffix, i, expansionDepth + 1);
+      if (alternatives === null) return null;
+      for (const alternative of alternatives) {
         expanded.push(alternative);
         if (expanded.length >= MAX_BRACE_EXPANSIONS) return expanded;
       }
@@ -81,9 +94,10 @@ function expandBraces(pattern: string, from = 0): string[] {
 
 function matchExpandedGlob(pattern: string, filePath: string): boolean {
   let regexStr = '';
+  let inCharacterClass = false;
   for (let i = 0; i < pattern.length; i++) {
     const ch = pattern[i];
-    if (ch === '*') {
+    if (!inCharacterClass && ch === '*') {
       if (pattern[i + 1] === '*') {
         i++;
         if (pattern[i + 1] === '/') {
@@ -98,15 +112,27 @@ function matchExpandedGlob(pattern: string, filePath: string): boolean {
     } else if (ch === '\\' && i + 1 < pattern.length) {
       i++;                         // \X is a literal X
       regexStr += pattern[i].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    } else if (ch === '?') {
+    } else if (!inCharacterClass && ch === '[') {
+      inCharacterClass = true;
+      regexStr += ch;
+    } else if (inCharacterClass && ch === ']') {
+      inCharacterClass = false;
+      regexStr += ch;
+    } else if (!inCharacterClass && ch === '?') {
       regexStr += '.';             // ? matches single character
+    } else if (!inCharacterClass && ch === '^') {
+      regexStr += '\\^';          // ^ is literal outside a character class
     } else {
       regexStr += ch.replace(/[.+$(){}|]/g, '\\$&');
     }
   }
 
-  const regex = new RegExp(`^${regexStr}$`);
-  return regex.test(filePath);
+  try {
+    const regex = new RegExp(`^${regexStr}$`);
+    return regex.test(filePath);
+  } catch {
+    return false;
+  }
 }
 
 /**

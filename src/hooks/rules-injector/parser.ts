@@ -157,17 +157,29 @@ function parseArrayOrStringValue(
  * `src/**\/*.{ts,tsx}` stays one pattern while `a/*.ts, b/*.ts` still splits.
  */
 function splitOutsideBraces(value: string): string[] {
+  const { openings, closings } = findBalancedBraceIndices(value);
   const items: string[] = [];
   let current = '';
   let depth = 0;
+  let quoteChar = '';
   for (let i = 0; i < value.length; i++) {
     const char = value[i];
     if (char === '\\' && i + 1 < value.length) {
       current += char + value[++i];
       continue;
     }
-    if (char === '{') depth++;
-    else if (char === '}' && depth > 0) depth--;
+    if (quoteChar) {
+      current += char;
+      if (char === quoteChar) quoteChar = '';
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quoteChar = char;
+      current += char;
+      continue;
+    }
+    if (openings.has(i)) depth++;
+    else if (closings.has(i)) depth--;
     if (char === ',' && depth === 0) {
       items.push(current);
       current = '';
@@ -179,6 +191,36 @@ function splitOutsideBraces(value: string): string[] {
   return items;
 }
 
+/** Find only balanced, unescaped brace pairs, ignoring brace characters in quotes. */
+function findBalancedBraceIndices(value: string): { openings: Set<number>; closings: Set<number> } {
+  const openings = new Set<number>();
+  const closings = new Set<number>();
+  const stack: number[] = [];
+  let quoteChar = '';
+
+  for (let i = 0; i < value.length; i++) {
+    const char = value[i];
+    if (char === '\\' && i + 1 < value.length) {
+      i++;
+      continue;
+    }
+    if (quoteChar) {
+      if (char === quoteChar) quoteChar = '';
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quoteChar = char;
+    } else if (char === '{') {
+      stack.push(i);
+    } else if (char === '}' && stack.length > 0) {
+      openings.add(stack.pop()!);
+      closings.add(i);
+    }
+  }
+
+  return { openings, closings };
+}
+
 /**
  * Parse inline JSON-like array: ["a", "b", "c"]
  */
@@ -188,45 +230,10 @@ function parseInlineArray(value: string): string[] {
   const content = value.slice(1, endIdx).trim();
   if (!content) return [];
 
-  const items: string[] = [];
-  let current = '';
-  let inQuote = false;
-  let quoteChar = '';
-  let braceDepth = 0;
-
-  for (let i = 0; i < content.length; i++) {
-    const char = content[i];
-
-    if (!inQuote && (char === '"' || char === "'")) {
-      inQuote = true;
-      quoteChar = char;
-    } else if (inQuote && char === quoteChar) {
-      inQuote = false;
-      quoteChar = '';
-    } else if (!inQuote && char === '{') {
-      braceDepth++;
-      current += char;
-    } else if (!inQuote && char === '}' && braceDepth > 0) {
-      braceDepth--;
-      current += char;
-    } else if (!inQuote && braceDepth === 0 && char === ',') {
-      const trimmed = current.trim();
-      if (trimmed) {
-        items.push(parseStringValue(trimmed));
-      }
-      current = '';
-    } else {
-      current += char;
-    }
-  }
-
-  // Don't forget the last item
-  const trimmed = current.trim();
-  if (trimmed) {
-    items.push(parseStringValue(trimmed));
-  }
-
-  return items;
+  return splitOutsideBraces(content)
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0)
+    .map(parseStringValue);
 }
 
 /**
