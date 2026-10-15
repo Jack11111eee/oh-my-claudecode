@@ -389,7 +389,7 @@ export function runFeedbackCommand(command: string, directory: string): CommandB
     const unrunnable = failedToSpawn
       || result.status === 126
       || result.status === 127
-      || (hasShellMissingCommand && otherSignatures.length === 0);
+      || (!result.error && hasShellMissingCommand && otherSignatures.length === 0);
     return { signatures: unrunnable ? [] : signatures, ...(unrunnable ? { unrunnable: true } : {}) };
   } catch (error) {
     const errorCode = typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string'
