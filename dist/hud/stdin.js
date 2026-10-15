@@ -36,17 +36,15 @@ function normalizeCandidate(value) {
  * `getSessionStateDir` (which calls `validateSessionId`). A candidate
  * that fails validation (path traversal, disallowed chars, overlong) is
  * skipped so the next candidate still gets a chance — a non-empty-but-
- * invalid primary does not silently bypass a valid secondary.
- *
- * When env vars are absent, falls back to stdin.session_id if available,
- * then finally to the legacy flat path. This prevents concurrent sessions
- * without env vars from clobbering the same flat cache file.
+ * invalid primary does not silently bypass a valid secondary. Only when
+ * no candidate yields a valid session path do we fall back to the legacy
+ * flat path.
  *
  * The file name remains `hud-stdin-cache.json` so that the existing
  * session-end cleanup pattern (`/^hud-stdin-cache\.json$/`) still matches
  * and no migration is required for existing environments.
  */
-function getStdinCachePath(stdin) {
+function getStdinCachePath() {
     const root = getWorktreeRoot() || process.cwd();
     for (const envVar of SESSION_ID_ENV_VARS) {
         const candidate = normalizeCandidate(process.env[envVar]);
@@ -59,17 +57,6 @@ function getStdinCachePath(stdin) {
             // Invalid session id — try the next candidate.
         }
     }
-    // Fallback to stdin.session_id when env vars are absent, preventing
-    // concurrent sessions without env context from writing to the same flat path.
-    const stdinSessionId = stdin ? normalizeCandidate(stdin.session_id) : null;
-    if (stdinSessionId) {
-        try {
-            return join(getSessionStateDir(stdinSessionId, root), 'hud-stdin-cache.json');
-        }
-        catch {
-            // Invalid session id in stdin — fall through to legacy flat path.
-        }
-    }
     // Legacy flat path must also resolve through the shared OMC-root helper so
     // `OMC_STATE_DIR`-backed deployments land on the same directory as writers.
     return resolveOmcPath('state/hud-stdin-cache.json', root);
@@ -77,34 +64,15 @@ function getStdinCachePath(stdin) {
 /**
  * Persist the last successful stdin read to disk.
  * Used by --watch mode to recover data when stdin is a TTY.
- *
- * Skips writes when the cached content is unchanged to avoid constantly
- * touching the file on every HUD render cycle. Issue #4372: uses stdin.session_id
- * as a fallback session identifier when env vars are absent, so concurrent
- * sessions without env context do not overwrite each other's cache.
  */
 export function writeStdinCache(stdin) {
     try {
-        const cachePath = getStdinCachePath(stdin);
+        const cachePath = getStdinCachePath();
         const cacheDir = dirname(cachePath);
         if (!existsSync(cacheDir)) {
             mkdirSync(cacheDir, { recursive: true });
         }
-        // Only write if content has changed to avoid constant rewrites on every HUD render.
-        const newContent = JSON.stringify(stdin);
-        if (existsSync(cachePath)) {
-            try {
-                const existingContent = readFileSync(cachePath, 'utf-8');
-                if (existingContent === newContent) {
-                    // Content is unchanged; skip the write to avoid touching the mtime.
-                    return;
-                }
-            }
-            catch {
-                // If we can't read the existing file, fall through and write anyway.
-            }
-        }
-        writeFileSync(cachePath, newContent);
+        writeFileSync(cachePath, JSON.stringify(stdin));
     }
     catch {
         // Best-effort; ignore failures

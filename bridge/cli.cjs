@@ -47115,8 +47115,7 @@ function install(options = {}) {
       });
       if (!transaction.ok) throw new Error(transaction.error ?? "CLAUDE.md transaction failed");
       for (const backupPath of transaction.backups) log3(`Backed up existing CLAUDE.md to ${backupPath}`);
-      const claudeMdWrite = transaction.operations.find((operation) => operation.type === "write" && (0, import_path64.basename)(operation.path) === "CLAUDE.md");
-      log3(!claudeMdWrite ? "CLAUDE.md already up to date" : claudeMdWrite.existedBefore ? "Updated CLAUDE.md (merged with existing content)" : "Created CLAUDE.md");
+      log3(transaction.operations.some((operation) => operation.type === "write" && operation.existedBefore && (0, import_path64.basename)(operation.path) === "CLAUDE.md") ? "Updated CLAUDE.md (merged with existing content)" : "Created CLAUDE.md");
     }
     let hudScriptPath = null;
     const hudDisabledByOption = options.skipHud === true;
@@ -94300,7 +94299,7 @@ function normalizeCandidate(value) {
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
 }
-function getStdinCachePath(stdin) {
+function getStdinCachePath() {
   const root2 = getWorktreeRoot() || process.cwd();
   for (const envVar of SESSION_ID_ENV_VARS) {
     const candidate = normalizeCandidate(process.env[envVar]);
@@ -94310,33 +94309,16 @@ function getStdinCachePath(stdin) {
     } catch {
     }
   }
-  const stdinSessionId = stdin ? normalizeCandidate(stdin.session_id) : null;
-  if (stdinSessionId) {
-    try {
-      return (0, import_path150.join)(getSessionStateDir(stdinSessionId, root2), "hud-stdin-cache.json");
-    } catch {
-    }
-  }
   return resolveOmcPath("state/hud-stdin-cache.json", root2);
 }
 function writeStdinCache(stdin) {
   try {
-    const cachePath = getStdinCachePath(stdin);
+    const cachePath = getStdinCachePath();
     const cacheDir = (0, import_path150.dirname)(cachePath);
     if (!(0, import_fs125.existsSync)(cacheDir)) {
       (0, import_fs125.mkdirSync)(cacheDir, { recursive: true });
     }
-    const newContent = JSON.stringify(stdin);
-    if ((0, import_fs125.existsSync)(cachePath)) {
-      try {
-        const existingContent = (0, import_fs125.readFileSync)(cachePath, "utf-8");
-        if (existingContent === newContent) {
-          return;
-        }
-      } catch {
-      }
-    }
-    (0, import_fs125.writeFileSync)(cachePath, newContent);
+    (0, import_fs125.writeFileSync)(cachePath, JSON.stringify(stdin));
   } catch {
   }
 }
@@ -117832,7 +117814,7 @@ function buildHookRegistry(hooksJson) {
 }
 function selectApplicableEntries(registry2, event, matcherInput) {
   return registry2.filter(
-    (e) => e.event === event && (e.matcher === "*" || matcherInput !== void 0 && e.matcher.split("|").includes(matcherInput))
+    (e) => e.event === event && (e.matcher === "*" || e.matcher === matcherInput)
   ).sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
 }
 
