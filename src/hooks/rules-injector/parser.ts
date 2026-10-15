@@ -156,8 +156,8 @@ function parseArrayOrStringValue(
  * Split on commas that are not inside a `{...}` brace group, so a glob such as
  * `src/**\/*.{ts,tsx}` stays one pattern while `a/*.ts, b/*.ts` still splits.
  */
-function splitOutsideBraces(value: string): string[] {
-  const { openings, closings } = findBalancedBraceIndices(value);
+function splitOutsideBraces(value: string, respectQuotes = false): string[] {
+  const { openings, closings } = findBalancedBraceIndices(value, respectQuotes);
   const items: string[] = [];
   let current = '';
   let depth = 0;
@@ -168,12 +168,12 @@ function splitOutsideBraces(value: string): string[] {
       current += char + value[++i];
       continue;
     }
-    if (quoteChar) {
+    if (respectQuotes && quoteChar) {
       current += char;
       if (char === quoteChar) quoteChar = '';
       continue;
     }
-    if (char === '"' || char === "'") {
+    if (respectQuotes && (char === '"' || char === "'")) {
       quoteChar = char;
       current += char;
       continue;
@@ -192,7 +192,10 @@ function splitOutsideBraces(value: string): string[] {
 }
 
 /** Find only balanced, unescaped brace pairs, ignoring brace characters in quotes. */
-function findBalancedBraceIndices(value: string): { openings: Set<number>; closings: Set<number> } {
+function findBalancedBraceIndices(
+  value: string,
+  respectQuotes: boolean
+): { openings: Set<number>; closings: Set<number> } {
   const openings = new Set<number>();
   const closings = new Set<number>();
   const stack: number[] = [];
@@ -204,11 +207,11 @@ function findBalancedBraceIndices(value: string): { openings: Set<number>; closi
       i++;
       continue;
     }
-    if (quoteChar) {
+    if (respectQuotes && quoteChar) {
       if (char === quoteChar) quoteChar = '';
       continue;
     }
-    if (char === '"' || char === "'") {
+    if (respectQuotes && (char === '"' || char === "'")) {
       quoteChar = char;
     } else if (char === '{') {
       stack.push(i);
@@ -230,7 +233,7 @@ function parseInlineArray(value: string): string[] {
   const content = value.slice(1, endIdx).trim();
   if (!content) return [];
 
-  return splitOutsideBraces(content)
+  return splitOutsideBraces(content, true)
     .map((item) => item.trim())
     .filter((item) => item.length > 0)
     .map(parseStringValue);

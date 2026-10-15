@@ -67,6 +67,14 @@ describe('parseRuleFrontmatter brace globs', () => {
   it('still splits comma-separated patterns outside braces', () => {
     expect(parseGlobs('globs: a/*.{ts,tsx}, b/*.md')).toEqual(['a/*.{ts,tsx}', 'b/*.md']);
     expect(parseGlobs('globs: **/*.ts,**/*.tsx')).toEqual(['**/*.ts', '**/*.tsx']);
+    expect(parseGlobs("globs: \"docs/what's-new.md, src/*.ts\"")).toEqual([
+      "docs/what's-new.md",
+      'src/*.ts',
+    ]);
+    expect(parseGlobs("globs: docs/what's-new.md, src/*.ts")).toEqual([
+      "docs/what's-new.md",
+      'src/*.ts',
+    ]);
     expect(parseGlobs('globs: a{b.ts, docs/*.md')).toEqual(['a{b.ts', 'docs/*.md']);
     expect(parseGlobs('paths: [a{b.ts, docs/*.md]')).toEqual(['a{b.ts', 'docs/*.md']);
   });
