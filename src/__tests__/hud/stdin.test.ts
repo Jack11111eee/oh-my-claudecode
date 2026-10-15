@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { execSync } from 'child_process';
@@ -837,20 +837,24 @@ describe('writeStdinCache — stdin.session_id fallback for concurrent sessions 
     expect(existsSync(flatPath)).toBe(true);
   });
 
-  it('skips writes when content is unchanged to preserve mtime', () => {
-    const { statSync } = require('fs');
-    const stdin = makeStdin({ session_id: 'mtime-test', transcript_path: `${tmpRoot}/test.jsonl` });
-    writeStdinCache(stdin);
+  it('refreshes mtime for an unchanged active session so env-less readers select it', () => {
+    const alpha = makeStdin({ session_id: 'alpha', transcript_path: `${tmpRoot}/alpha.jsonl` });
+    const beta = makeStdin({ session_id: 'beta', transcript_path: `${tmpRoot}/beta.jsonl` });
+    writeStdinCache(alpha);
+    writeStdinCache(beta);
 
-    const cachePath = join(tmpRoot, '.omc', 'state', 'sessions', 'mtime-test', 'hud-stdin-cache.json');
-    const stat1 = statSync(cachePath);
+    const alphaPath = join(tmpRoot, '.omc', 'state', 'sessions', 'alpha', 'hud-stdin-cache.json');
+    const betaPath = join(tmpRoot, '.omc', 'state', 'sessions', 'beta', 'hud-stdin-cache.json');
+    const oldTime = (Date.now() - 60_000) / 1000;
+    utimesSync(alphaPath, oldTime - 60, oldTime - 60);
+    utimesSync(betaPath, oldTime, oldTime);
 
-    // Write the same content again immediately; mtime should not change.
-    writeStdinCache(stdin);
-    const stat2 = statSync(cachePath);
+    // The active payload is byte-for-byte unchanged; its activity time must
+    // still advance so a competing session's newer cache does not win.
+    writeStdinCache(alpha);
 
-    // mtime should be unchanged because writeStdinCache skipped the write.
-    expect(stat2.mtimeMs).toBe(stat1.mtimeMs);
+    expect(statSync(alphaPath).mtimeMs).toBeGreaterThan(statSync(betaPath).mtimeMs);
+    expect(readStdinCache()?.session_id).toBe('alpha');
   });
 
   it('[REGRESSION: Issue #4372] readStdinCache finds session-scoped cache written via stdin.session_id when no env vars are set', () => {
