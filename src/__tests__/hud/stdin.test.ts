@@ -852,4 +852,30 @@ describe('writeStdinCache — stdin.session_id fallback for concurrent sessions 
     // mtime should be unchanged because writeStdinCache skipped the write.
     expect(stat2.mtimeMs).toBe(stat1.mtimeMs);
   });
+
+  it('[REGRESSION: Issue #4372] readStdinCache finds session-scoped cache written via stdin.session_id when no env vars are set', () => {
+    // Scenario: a session without CLAUDE_SESSION_ID env var writes its cache using stdin.session_id
+    // (e.g., a statusline process rendering real-time updates). Later, a --watch mode reader
+    // (also without env vars, because it runs as a detached tmux pane) must recover the cache
+    // by scanning session directories instead of falling back to the stale flat path.
+    const stdin = makeStdin({
+      session_id: 'writer-session',
+      transcript_path: `${tmpRoot}/write-session.jsonl`,
+    });
+    writeStdinCache(stdin);
+
+    // Verify the write landed in the session-scoped directory.
+    const sessionPath = join(tmpRoot, '.omc', 'state', 'sessions', 'writer-session', 'hud-stdin-cache.json');
+    expect(existsSync(sessionPath)).toBe(true);
+    expect(JSON.parse(readFileSync(sessionPath, 'utf-8')).transcript_path).toBe(
+      `${tmpRoot}/write-session.jsonl`,
+    );
+
+    // Now simulate a --watch reader that has no env vars. It must find the session cache
+    // via readStdinCache() (which calls readMostRecentCache).
+    const readBack = readStdinCache();
+    expect(readBack).not.toBeNull();
+    expect(readBack?.transcript_path).toBe(`${tmpRoot}/write-session.jsonl`);
+    expect(readBack?.session_id).toBe('writer-session');
+  });
 });
