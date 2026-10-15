@@ -380,7 +380,11 @@ export function runFeedbackCommand(command: string, directory: string): CommandB
     const signatures = signatureLines(outputWithExecutionError);
     const hasShellMissingCommand = SHELL_MISSING_COMMAND_PATTERN.test(output);
     const otherSignatures = hasShellMissingCommand
-      ? signatureLines(output.split(/\r?\n/).filter((line) => !SHELL_MISSING_COMMAND_PATTERN.test(line)).join('\n'))
+      ? signatureLines(output.split(/\r?\n/).filter((line) => (
+        !SHELL_MISSING_COMMAND_PATTERN.test(line)
+        && !/^>\s/.test(line)
+        && !/^operable program or batch file\.?$/i.test(line)
+      )).join('\n'))
       : signatures;
     const unrunnable = failedToSpawn
       || result.status === 126

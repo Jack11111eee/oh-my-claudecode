@@ -220,6 +220,16 @@ process.exit(1);
     expect(result.signatures).toContain('FAIL fixture logs "command not found" while testing error handling');
   });
 
+  it('recognizes a shell missing-command diagnostic with npm wrapper output', () => {
+    writeFailer(`> fb-fixture@1.0.0 test
+> missing-command
+'missing-command' is not recognized as an internal or external command,
+operable program or batch file.`);
+    const result = runFeedbackCommand('node failer.js', dir);
+
+    expect(result).toEqual({ signatures: [], unrunnable: true });
+  });
+
   it('still detects a missing command and does not call a repeatedly unrunnable check clean', () => {
     writePackage(`"${join(dir, 'missing-command')}"`);
     expect(ralphVerify({ session: 'sess-missing-command', writeBaseline: true }, dir)).toBe(0);
