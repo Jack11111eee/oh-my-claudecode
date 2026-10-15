@@ -116,5 +116,7 @@ describe('shouldApplyRule glob matching', () => {
   it('keeps a backslash-escaped brace literal', () => {
     expect(applies('a\\{b,c}.ts', 'a{b,c}.ts')).toBe(true);
     expect(applies('a\\{b,c}.ts', 'ab.ts')).toBe(false);
+    expect(applies(String.raw`fixtures/\{a,b\}.json`, 'fixtures/{a,b}.json')).toBe(true);
+    expect(applies(String.raw`fixtures/\{a,b\}.json`, 'fixtures/a.json')).toBe(false);
   });
 });

@@ -83,6 +83,16 @@ describe('parseRuleFrontmatter brace globs', () => {
     expect(parseGlobs('paths: [src/*.{ts,tsx}, docs/*.md]')).toEqual(['src/*.{ts,tsx}', 'docs/*.md']);
     expect(parseGlobs('paths: [src/*.{ts,tsx,}, docs/*.md]')).toEqual(['src/*.{ts,tsx,}', 'docs/*.md']);
     expect(parseGlobs('paths: ["src/*.{ts,tsx}", "docs/*.md"]')).toEqual(['src/*.{ts,tsx}', 'docs/*.md']);
+    expect(parseGlobs(String.raw`globs: ['fixtures/\{a,b\}.json']`)).toEqual([
+      String.raw`fixtures/\{a,b\}.json`,
+    ]);
+  });
+
+  it('preserves escaped literal brace globs in a block array', () => {
+    const literalGlob = String.raw`fixtures/\{a,b\}.json`;
+    const { metadata } = parseRuleFrontmatter(`---\nglobs:\n  - '${literalGlob}'\n---\nbody`);
+
+    expect(metadata.globs).toEqual([literalGlob]);
   });
 
   it('merges paths and globs without splitting brace alternatives', () => {
