@@ -206,6 +206,64 @@ function splitOutsideBraces(value: string, respectQuotes = false): string[] {
   return items;
 }
 
+function isQuotedFlowItemAfterComma(value: string, commaIndex: number): boolean {
+  let quoteIndex = commaIndex + 1;
+  while (quoteIndex < value.length && /\s/.test(value[quoteIndex])) quoteIndex++;
+  const quoteChar = value[quoteIndex];
+  if (quoteChar !== '"' && quoteChar !== "'") return false;
+
+  let closingQuoteIndex = -1;
+  for (let i = quoteIndex + 1; i < value.length; i++) {
+    const char = value[i];
+    if (char === '\\' && i + 1 < value.length) i++;
+    else if (quoteChar === "'" && char === "'" && value[i + 1] === "'") i++;
+    else if (char === quoteChar) {
+      closingQuoteIndex = i;
+      break;
+    }
+  }
+  if (closingQuoteIndex === -1) return false;
+
+  let boundaryIndex = closingQuoteIndex + 1;
+  while (boundaryIndex < value.length && /\s/.test(value[boundaryIndex])) boundaryIndex++;
+  return (
+    boundaryIndex === value.length ||
+    value[boundaryIndex] === ',' ||
+    value[boundaryIndex] === ']'
+  );
+}
+
+function findMatchingBraceEnd(value: string, openingIndex: number): number {
+  let depth = 0;
+  let quoteChar = '';
+  let canStartQuote = false;
+  for (let i = openingIndex; i < value.length; i++) {
+    const char = value[i];
+    if (char === '\\' && i + 1 < value.length) {
+      i++;
+    } else if (quoteChar) {
+      if (char === quoteChar) {
+        quoteChar = '';
+        canStartQuote = false;
+      }
+    } else if (char === '{') {
+      depth++;
+      canStartQuote = false;
+    } else if (char === '}' && depth > 0) {
+      depth--;
+      if (depth === 0) return i;
+      canStartQuote = false;
+    } else if (char === ',') {
+      canStartQuote = true;
+    } else if (canStartQuote && (char === '"' || char === "'")) {
+      quoteChar = char;
+    } else if (!/\s/.test(char)) {
+      canStartQuote = false;
+    }
+  }
+  return -1;
+}
+
 /** Find only balanced, unescaped brace pairs, ignoring brace characters in quotes. */
 function findBalancedBraceIndices(
   value: string,
@@ -214,6 +272,7 @@ function findBalancedBraceIndices(
   const openings = new Set<number>();
   const closings = new Set<number>();
   const stack: number[] = [];
+  const braceEndByOpening = new Map<number, number>();
   let quoteChar = '';
   let canStartQuote = true;
 
@@ -242,6 +301,24 @@ function findBalancedBraceIndices(
       canStartQuote = false;
     } else if (char === ',' && stack.length === 0) {
       canStartQuote = true;
+    } else if (
+      char === ',' &&
+      respectQuotes &&
+      stack.length > 0 &&
+      isQuotedFlowItemAfterComma(value, i)
+    ) {
+      const braceOpeningIndex = stack[stack.length - 1];
+      let braceEndIndex = braceEndByOpening.get(braceOpeningIndex);
+      if (braceEndIndex === undefined) {
+        braceEndIndex = findMatchingBraceEnd(value, braceOpeningIndex);
+        braceEndByOpening.set(braceOpeningIndex, braceEndIndex);
+      }
+      if (braceEndIndex === -1) {
+        stack.length = 0;
+        canStartQuote = true;
+      } else {
+        canStartQuote = false;
+      }
     } else if (!/\s/.test(char)) {
       canStartQuote = false;
     }

@@ -89,6 +89,21 @@ describe('parseRuleFrontmatter brace globs', () => {
     ]);
   });
 
+  it('does not let an unmatched brace absorb a quoted flow item', () => {
+    expect(parseGlobs('globs: [a{b, "docs/ } #notes/**", src/**]')).toEqual([
+      'a{b',
+      'docs/ } #notes/**',
+      'src/**',
+    ]);
+  });
+
+  it('keeps quoted alternatives inside balanced brace groups', () => {
+    expect(parseGlobs('globs: [src/{foo,"bar",baz}, docs/**]')).toEqual([
+      'src/{foo,"bar",baz}',
+      'docs/**',
+    ]);
+  });
+
   it('preserves escaped literal brace globs in a block array', () => {
     const literalGlob = String.raw`fixtures/\{a,b\}.json`;
     const { metadata } = parseRuleFrontmatter(`---\nglobs:\n  - '${literalGlob}'\n---\nbody`);
