@@ -177,6 +177,14 @@ describe('parseRuleFrontmatter trailing comments', () => {
     ]);
   });
 
+  it('keeps unmatched braces from spanning later quoted flow items', () => {
+    expect(parse('globs: [a{b, "docs/ } #notes/**", src/**]').globs).toEqual([
+      'a{b',
+      'docs/ } #notes/**',
+      'src/**',
+    ]);
+  });
+
   it('keeps brace-alternative quotes out of flow item boundaries', () => {
     const inlineArray = String.raw`globs: [src/{foo,'bar}, "docs/ #notes/**"] # see ]`;
     expect(parse(inlineArray).globs).toEqual(["src/{foo,'bar}", 'docs/ #notes/**']);
@@ -234,6 +242,9 @@ describe('parseRuleFrontmatter trailing comments', () => {
       String.raw`docs/foo\'`,
       'src/**',
     ]);
+    expect(parse(String.raw`globs: 'docs/foo\'' # don't include`).globs).toBe(
+      String.raw`docs/foo\'`,
+    );
   });
 });
 

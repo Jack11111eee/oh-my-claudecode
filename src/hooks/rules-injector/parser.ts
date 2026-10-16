@@ -83,11 +83,70 @@ function parseYamlContent(yamlContent: string): RuleMetadata {
  * Trim a YAML value and drop a trailing ` # comment`. A `#` only starts a
  * comment at the start of the value or after a YAML space/tab, never inside quotes.
  */
-function isSingleQuoteEscapeAtItemEnd(value: string, backslashIndex: number): boolean {
+/** Marks apostrophes that can close a quoted item before padding or a comment. */
+function findTerminalSingleQuoteSuffix(value: string): Uint8Array {
+  const suffix = new Uint8Array(value.length + 1);
+  let nextNonHorizontalWhitespace = value.length;
+
+  for (let i = value.length - 1; i >= 0; i--) {
+    suffix[i] = suffix[i + 1];
+    if (value[i] === "'") {
+      const isTerminal =
+        nextNonHorizontalWhitespace === value.length ||
+        value[nextNonHorizontalWhitespace] === ',' ||
+        value[nextNonHorizontalWhitespace] === ']' ||
+        (nextNonHorizontalWhitespace > i + 1 && value[nextNonHorizontalWhitespace] === '#');
+      if (isTerminal) suffix[i] = 1;
+    }
+    if (value[i] !== ' ' && value[i] !== '\t') nextNonHorizontalWhitespace = i;
+  }
+
+  return suffix;
+}
+
+function isSingleQuoteEscapeAtItemEnd(
+  value: string,
+  backslashIndex: number,
+  terminalQuoteSuffix?: Uint8Array
+): boolean {
   let nextIndex = backslashIndex + 3;
-  while (nextIndex < value.length && /\s/.test(value[nextIndex])) nextIndex++;
+  while (nextIndex < value.length && (value[nextIndex] === ' ' || value[nextIndex] === '\t')) {
+    nextIndex++;
+  }
   return (
-    nextIndex === value.length || value[nextIndex] === ',' || value[nextIndex] === ']'
+    nextIndex === value.length ||
+    value[nextIndex] === ',' ||
+    value[nextIndex] === ']' ||
+    (terminalQuoteSuffix !== undefined &&
+      nextIndex > backslashIndex + 3 &&
+      value[nextIndex] === '#' &&
+      !terminalQuoteSuffix[nextIndex + 1])
+  );
+}
+
+/** Treat a complete quoted item after a comma as a flow boundary despite unmatched braces. */
+function isQuotedFlowItemAfterComma(value: string, commaIndex: number): boolean {
+  let quoteIndex = commaIndex + 1;
+  while (quoteIndex < value.length && /\s/.test(value[quoteIndex])) quoteIndex++;
+  const quoteChar = value[quoteIndex];
+  if (quoteChar !== '"' && quoteChar !== "'") return false;
+
+  let closingQuoteIndex = -1;
+  for (let i = quoteIndex + 1; i < value.length; i++) {
+    const char = value[i];
+    if (char === '\\' && i + 1 < value.length) i++;
+    else if (quoteChar === "'" && char === "'" && value[i + 1] === "'") i++;
+    else if (char === quoteChar) {
+      closingQuoteIndex = i;
+      break;
+    }
+  }
+  if (closingQuoteIndex === -1) return false;
+
+  let boundaryIndex = closingQuoteIndex + 1;
+  while (boundaryIndex < value.length && /\s/.test(value[boundaryIndex])) boundaryIndex++;
+  return (
+    boundaryIndex === value.length || value[boundaryIndex] === ',' || value[boundaryIndex] === ']'
   );
 }
 
@@ -128,7 +187,11 @@ function findFlowArrayClosingIndex(value: string, openerIndex: number): number {
       canStartQuote = false;
     } else if (char === ']' && suffixIsCommentOrPadding[i + 1]) {
       return i;
-    } else if (char === ',' && braceDepth === 0) {
+    } else if (
+      char === ',' &&
+      (braceDepth === 0 || isQuotedFlowItemAfterComma(value, i))
+    ) {
+      braceDepth = 0;
       canStartQuote = true;
     } else if (!/\s/.test(char)) {
       canStartQuote = false;
@@ -151,6 +214,8 @@ function stripTrailingComment(value: string): string {
   const balancedBraceIndices = isFlowArray
     ? findBalancedBraceIndices(flowArrayContent, true)
     : null;
+  const terminalQuoteSuffix =
+    !isFlowArray && value.includes("\\''") ? findTerminalSingleQuoteSuffix(value) : undefined;
   let quoteChar = '';
   let canStartQuote = true;
   let braceDepth = 0;
@@ -159,7 +224,7 @@ function stripTrailingComment(value: string): string {
     const char = value[i];
     if (quoteChar) {
       if (quoteChar === "'" && char === '\\' && value[i + 1] === "'" && value[i + 2] === "'") {
-        if (isSingleQuoteEscapeAtItemEnd(value, i)) i++;
+        if (isSingleQuoteEscapeAtItemEnd(value, i, terminalQuoteSuffix)) i++;
         canStartQuote = false;
       } else if (char === '\\' && i + 1 < value.length) i++;
       else if (char === "'" && quoteChar === "'" && value[i + 1] === "'") i++;
@@ -375,7 +440,11 @@ function findBalancedBraceIndices(
       openings.add(stack.pop()!);
       closings.add(i);
       canStartQuote = false;
-    } else if (char === ',' && stack.length === 0) {
+    } else if (
+      char === ',' &&
+      (stack.length === 0 || isQuotedFlowItemAfterComma(value, i))
+    ) {
+      stack.length = 0;
       canStartQuote = true;
     } else if (!/\s/.test(char)) {
       canStartQuote = false;
