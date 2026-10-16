@@ -39,11 +39,139 @@ export function stripOptionalQuotes(value: string): string {
   return unquoteYamlScalar(trimmed).trim();
 }
 
+/** `|` / `>` block scalar header with optional chomping/indent indicators and comment. */
+const BLOCK_SCALAR_HEADER = /^([|>])(?:(?:([+-])([1-9])?)|(?:([1-9])([+-])?))?(?:[ \t]+#.*)?$/;
+
+interface BlockScalarHeader {
+  folded: boolean;
+  chomping: 'clip' | 'keep' | 'strip';
+  indentIndicator?: number;
+}
+
+function parseBlockScalarHeader(rawValue: string): BlockScalarHeader | null {
+  const match = BLOCK_SCALAR_HEADER.exec(rawValue);
+  if (!match) return null;
+
+  const chompingIndicator = match[2] ?? match[5];
+  const indentIndicator = match[3] ?? match[4];
+  return {
+    folded: match[1] === '>',
+    chomping: chompingIndicator === '+' ? 'keep' : chompingIndicator === '-' ? 'strip' : 'clip',
+    ...(indentIndicator ? { indentIndicator: Number(indentIndicator) } : {}),
+  };
+}
+
+interface BlockScalarRow {
+  text: string;
+  moreIndented: boolean;
+}
+
+interface BlockScalarIndent {
+  value: number;
+  isDetermined: boolean;
+}
+
+function countLeadingYamlSpaces(line: string): number {
+  let count = 0;
+  while (line[count] === ' ') count++;
+  return count;
+}
+
+function isBlankBlockScalarLine(line: string): boolean {
+  return countLeadingYamlSpaces(line) === line.length;
+}
+
+function getBlockScalarContentIndent(
+  lines: string[],
+  startIndex: number,
+  parentIndent: number,
+  header: BlockScalarHeader,
+): BlockScalarIndent {
+  if (header.indentIndicator !== undefined) {
+    return { value: parentIndent + header.indentIndicator, isDetermined: true };
+  }
+
+  let leadingBlankIndent = parentIndent;
+  for (let i = startIndex; i < lines.length; i++) {
+    const line = lines[i];
+    const indent = countLeadingYamlSpaces(line);
+    if (isBlankBlockScalarLine(line)) {
+      leadingBlankIndent = Math.max(leadingBlankIndent, indent);
+      continue;
+    }
+    if (indent > parentIndent) {
+      if (line[indent] === '#' && indent < leadingBlankIndent) {
+        return { value: leadingBlankIndent, isDetermined: false };
+      }
+      return { value: indent, isDetermined: true };
+    }
+    break;
+  }
+
+  return { value: parentIndent + 1, isDetermined: false };
+}
+
+/** Read literal/folded block lines and apply YAML chomping to their final breaks. */
+function readBlockScalar(blockLines: string[], header: BlockScalarHeader, contentIndent: BlockScalarIndent): string {
+  const rows: BlockScalarRow[] = blockLines.map((line) => {
+    const indent = countLeadingYamlSpaces(line);
+    if (isBlankBlockScalarLine(line) && !contentIndent.isDetermined) return { text: '', moreIndented: false };
+    const moreIndented = indent > contentIndent.value || line[contentIndent.value] === '\t';
+    return {
+      text: line.slice(Math.min(contentIndent.value, indent)),
+      moreIndented,
+    };
+  });
+
+  let value: string;
+  if (header.folded) {
+    value = foldBlockScalarRows(rows);
+  } else {
+    value = rows.map((row) => row.text).join('\n') + (rows.length > 0 ? '\n' : '');
+  }
+
+  if (header.chomping === 'keep') return value;
+  const withoutTrailingBreaks = value.replace(/\n+$/, '');
+  if (header.chomping === 'strip' || !rows.some((row) => row.text !== '')) return withoutTrailingBreaks;
+  return `${withoutTrailingBreaks}\n`;
+}
+
+function foldBlockScalarRows(rows: BlockScalarRow[]): string {
+  let value = '';
+  let previous: BlockScalarRow | undefined;
+  let pendingEmptyLines = 0;
+
+  for (const row of rows) {
+    if (row.text === '') {
+      pendingEmptyLines++;
+      continue;
+    }
+
+    if (!previous) {
+      value += '\n'.repeat(pendingEmptyLines);
+    } else if (pendingEmptyLines > 0) {
+      const preservedBreak = previous.moreIndented || row.moreIndented ? 1 : 0;
+      value += '\n'.repeat(pendingEmptyLines + preservedBreak);
+    } else {
+      value += previous.moreIndented || row.moreIndented ? '\n' : ' ';
+    }
+
+    value += row.text;
+    previous = row;
+    pendingEmptyLines = 0;
+  }
+
+  return value + '\n'.repeat(previous ? pendingEmptyLines + 1 : pendingEmptyLines);
+}
+
 /**
  * Parse YAML-like frontmatter from markdown content.
  * Returns { metadata, body } where metadata is a flat string map.
  */
-export function parseFrontmatter(content: string): { metadata: Record<string, string>; body: string } {
+export function parseFrontmatter(content: string): {
+  metadata: Record<string, string>;
+  body: string;
+} {
   const frontmatterRegex = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)([\s\S]*)$/;
   const match = content.match(frontmatterRegex);
 
@@ -63,7 +191,8 @@ export function parseFrontmatter(content: string): { metadata: Record<string, st
   let flowDepth = 0;
   let quote: "'" | '"' | null = null;
 
-  for (const line of lines) {
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    const line = lines[lineIndex];
     const trimmed = line.trimStart();
     const indent = line.length - trimmed.length;
 
@@ -75,9 +204,24 @@ export function parseFrontmatter(content: string): { metadata: Record<string, st
       if (colonIndex === -1) continue;
 
       const key = line.slice(0, colonIndex).trim();
-      const value = stripOptionalQuotes(line.slice(colonIndex + 1));
+      const rawValue = line.slice(colonIndex + 1).trim();
 
-      metadata[key] = value;
+      const blockHeader = parseBlockScalarHeader(rawValue);
+      if (blockHeader) {
+        // `key: >-` / `key: |` — the value is the more-indented lines that follow.
+        const contentIndent = getBlockScalarContentIndent(lines, lineIndex + 1, rootIndent!, blockHeader);
+        const blockLines: string[] = [];
+        while (lineIndex + 1 < lines.length) {
+          const nextLine = lines[lineIndex + 1];
+          const nextIndent = countLeadingYamlSpaces(nextLine);
+          if (!isBlankBlockScalarLine(nextLine) && nextIndent < contentIndent.value) break;
+          blockLines.push(lines[++lineIndex]);
+        }
+        metadata[key] = readBlockScalar(blockLines, blockHeader, contentIndent);
+        continue;
+      }
+
+      metadata[key] = stripOptionalQuotes(rawValue);
     } else {
       // Inside an unterminated multiline flow collection ({...} / [...]) every line is a
       // continuation member, never a root mapping key — even when it shares the root

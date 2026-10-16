@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { stripOptionalQuotes, parseFrontmatter, parseFrontmatterAliases, parseFrontmatterList, splitFlowSequenceItems } from '../frontmatter.js';
+import {
+  stripOptionalQuotes,
+  parseFrontmatter,
+  parseFrontmatterAliases,
+  parseFrontmatterList,
+  splitFlowSequenceItems,
+} from '../frontmatter.js';
 
 describe('stripOptionalQuotes', () => {
   it('strips double quotes', () => {
@@ -115,7 +121,7 @@ Body`;
 
     expect(result.metadata).toEqual({
       name: 'mixed',
-      description: 'Mixed separators'
+      description: 'Mixed separators',
     });
     expect(result.body).toBe(body);
   });
@@ -126,11 +132,11 @@ Body`;
 
     expect(parseFrontmatter(partialOpen)).toEqual({
       metadata: {},
-      body: partialOpen
+      body: partialOpen,
     });
     expect(parseFrontmatter(partialClose)).toEqual({
       metadata: {},
-      body: partialClose
+      body: partialClose,
     });
   });
 
@@ -213,7 +219,6 @@ Body`;
       description: 'Root description',
     });
   });
-
 
   it('ignores nested members of same-indent multiline flow mappings', () => {
     const content = `---
@@ -349,5 +354,143 @@ describe('parseFrontmatterList quoted commas', () => {
   it('still splits simple lists', () => {
     expect(parseFrontmatterList('[foo, bar,baz]')).toEqual(['foo', 'bar', 'baz']);
     expect(parseFrontmatterList('[]')).toEqual([]);
+  });
+});
+
+describe('parseFrontmatter block scalars', () => {
+  const parse = (yaml: string) => parseFrontmatter(`---\n${yaml}\n---\nbody`).metadata;
+
+  it('folds `>-` descriptions into one line', () => {
+    expect(parse('name: x\ndescription: >-\n  First part\n  second part\nmodel: opus')).toEqual({
+      name: 'x',
+      description: 'First part second part',
+      model: 'opus',
+    });
+  });
+
+  it('folds `>` descriptions and keeps blank-line paragraph breaks', () => {
+    expect(parse('description: >\n  One\n  two\n\n  three\n')).toEqual({
+      description: 'One two\nthree\n',
+    });
+  });
+
+  it('keeps line breaks for `|` literals', () => {
+    expect(parse('description: |\n  line one\n    indented\n  line two')).toEqual({
+      description: 'line one\n  indented\nline two\n',
+    });
+  });
+
+  it('preserves spaces beyond the content indent on whitespace-only literal rows', () => {
+    expect(parse('description: |-\n  first\n   \n  second')).toEqual({
+      description: 'first\n \nsecond',
+    });
+    expect(parse('description: |-\n  first\n   \n')).toEqual({
+      description: 'first\n ',
+    });
+  });
+
+  it('preserves breaks around more-indented folded lines', () => {
+    expect(parse('description: >-\n  Run:\n    npm test\n  afterwards')).toEqual({
+      description: 'Run:\n  npm test\nafterwards',
+    });
+  });
+
+  it('stops at a nonblank line indented less than the scalar content', () => {
+    expect(parse('description: >-\n    Real text\n  # note\nmodel: opus')).toEqual({
+      description: 'Real text',
+      model: 'opus',
+    });
+  });
+
+  it('applies explicit indentation relative to the key and retains extra indentation', () => {
+    expect(parse('  name: x\n  description: |2-\n      kept\n  model: opus')).toEqual({
+      name: 'x',
+      description: '  kept',
+      model: 'opus',
+    });
+  });
+
+  it('counts only ASCII spaces when inferring scalar indentation', () => {
+    expect(parse('description: |-\n   text')).toEqual({ description: ' text' });
+    expect(parse('description: >-\n  first\n   second')).toEqual({ description: 'first  second' });
+  });
+
+  it('preserves folded breaks around tab-indented content', () => {
+    expect(parse('description: >-\n  before\n  \tcode\n  after')).toEqual({
+      description: 'before\n\tcode\nafter',
+    });
+  });
+
+  it('applies strip, clip, and keep chomping to folded scalars', () => {
+    expect(parse('description: >-\n  first\n  second')).toEqual({
+      description: 'first second',
+    });
+    expect(parse('description: >-\n  first\n  second\n\n')).toEqual({
+      description: 'first second',
+    });
+    expect(parse('description: >\n  first\n  second')).toEqual({
+      description: 'first second\n',
+    });
+    expect(parse('description: >+\n  first\n  second\n')).toEqual({
+      description: 'first second\n\n',
+    });
+  });
+
+  it('applies strip, clip, and keep chomping to literal scalars', () => {
+    expect(parse('description: |-\n  first\n  second')).toEqual({
+      description: 'first\nsecond',
+    });
+    expect(parse('description: |-\n  first\n  second\n\n')).toEqual({
+      description: 'first\nsecond',
+    });
+    expect(parse('description: |\n  first\n  second')).toEqual({
+      description: 'first\nsecond\n',
+    });
+    expect(parse('description: |+\n  first\n  second\n')).toEqual({
+      description: 'first\nsecond\n\n',
+    });
+  });
+
+  it('does not add a clipped line break to an empty block scalar', () => {
+    expect(parse('description: |\n\n')).toEqual({ description: '' });
+  });
+
+  it('normalizes all-blank implicit block scalars', () => {
+    expect(parse('description: |-\n  \nmodel: opus')).toEqual({
+      description: '',
+      model: 'opus',
+    });
+  });
+
+  it('keeps a shallower comment outside a block after leading blank rows', () => {
+    expect(parse('description: |-\n  \n # note\nmodel: opus')).toEqual({
+      description: '',
+      model: 'opus',
+    });
+    expect(parse('description: |-\n  \n  # note\nmodel: opus')).toEqual({
+      description: '\n# note',
+      model: 'opus',
+    });
+  });
+
+  it('accepts chomping and indentation indicators and a trailing comment', () => {
+    expect(parse('description: |+2 # note\n  kept')).toEqual({
+      description: 'kept\n',
+    });
+  });
+
+  it('parses CRLF block scalars', () => {
+    expect(parseFrontmatter('---\r\ndescription: >-\r\n  a\r\n  b\r\nname: x\r\n---\r\nbody').metadata).toEqual({
+      description: 'a b',
+      name: 'x',
+    });
+  });
+
+  it('does not treat a quoted or plain `>` text value as a block scalar', () => {
+    expect(parse('description: ">"\nargument-hint: a > b\nplain-leading: > text')).toEqual({
+      description: '>',
+      'argument-hint': 'a > b',
+      'plain-leading': '> text',
+    });
   });
 });
