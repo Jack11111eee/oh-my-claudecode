@@ -223,6 +223,13 @@ describe('parseRuleFrontmatter trailing comments', () => {
     ]);
   });
 
+  it('does not use flow-item recovery for comma-separated scalar globs', () => {
+    expect(parse(`globs: "src/{foo,' #bar}', docs/**"`).globs).toEqual([
+      "src/{foo,' #bar}'",
+      'docs/**',
+    ]);
+  });
+
   it('keeps a literal quote from hiding a balanced brace closer', () => {
     const firstPattern = `src/{a,'x',"}`;
 

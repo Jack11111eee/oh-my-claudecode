@@ -683,7 +683,8 @@ function findBalancedBraceIndices(
       canStartQuote = false;
     } else if (
       char === ',' &&
-      isFlowItemBoundaryAtComma(value, i, stack, scanIndex)
+      (stack.length === 0 ||
+        (respectQuotes && isFlowItemBoundaryAtComma(value, i, stack, scanIndex)))
     ) {
       canStartQuote = true;
     } else if (!/\s/.test(char)) {
