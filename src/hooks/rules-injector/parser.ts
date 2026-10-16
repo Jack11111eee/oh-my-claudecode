@@ -42,8 +42,7 @@ export function parseRuleFrontmatter(content: string): RuleFrontmatterResult {
  */
 function parseYamlContent(yamlContent: string): RuleMetadata {
   // Split on CRLF or LF so a trailing "\r" from a Windows-authored rule file
-  // never leaks into a line. The multi-line array matcher (/^\s+-\s*(.*)$/)
-  // stops at "\r", which would otherwise collapse a "  - pattern" list to ''.
+  // never leaks into a line and prevents multi-line array items from matching.
   const lines = yamlContent.split(/\r?\n/);
   const metadata: RuleMetadata = {};
 
@@ -138,7 +137,7 @@ function parseArrayOrStringValue(
     return { value: parseInlineArray(rawValue), consumed: 1 };
   }
 
-  // Case 2: Multi-line array (value is empty, next lines start with "  - ")
+  // Case 2: Multi-line array (value is empty, next lines start with a dash)
   if (!rawValue || rawValue === '') {
     const arrayItems: string[] = [];
     let consumed = 1;
@@ -146,8 +145,8 @@ function parseArrayOrStringValue(
     for (let j = currentIndex + 1; j < lines.length; j++) {
       const nextLine = lines[j];
 
-      // Check if this is an array item (starts with whitespace + dash)
-      const arrayMatch = nextLine.match(/^\s+-\s*(.*)$/);
+      // Check whether this line starts with a YAML sequence marker.
+      const arrayMatch = nextLine.match(/^\s*-\s*(.*)$/);
       if (arrayMatch) {
         const itemValue = parseStringValue(stripTrailingComment(arrayMatch[1]));
         if (itemValue) {
