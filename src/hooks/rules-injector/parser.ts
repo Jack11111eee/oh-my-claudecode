@@ -84,6 +84,14 @@ function parseYamlContent(yamlContent: string): RuleMetadata {
 function stripTrailingComment(value: string): string {
   const flowArrayOpenerIndex = value.search(/[^ \t]/);
   const isFlowArray = flowArrayOpenerIndex >= 0 && value[flowArrayOpenerIndex] === '[';
+  const flowArrayContentStartIndex = isFlowArray ? flowArrayOpenerIndex + 1 : 0;
+  const flowArrayContentEndIndex = isFlowArray ? value.lastIndexOf(']') : -1;
+  const flowArrayContent =
+    isFlowArray && flowArrayContentEndIndex >= flowArrayContentStartIndex
+      ? value.slice(flowArrayContentStartIndex, flowArrayContentEndIndex)
+      : '';
+  const { openings: balancedBraceOpeners, closings: balancedBraceClosers } =
+    findBalancedBraceIndices(flowArrayContent, true);
   let quoteChar = '';
   let canStartQuote = true;
   let braceDepth = 0;
@@ -107,12 +115,13 @@ function stripTrailingComment(value: string): string {
     ) {
       return value.slice(0, i).trim();
     } else {
+      const braceIndex = i - flowArrayContentStartIndex;
       if (isFlowArray && i === flowArrayOpenerIndex) {
         canStartQuote = true;
-      } else if (isFlowArray && char === '{') {
+      } else if (isFlowArray && balancedBraceOpeners.has(braceIndex)) {
         braceDepth++;
         canStartQuote = false;
-      } else if (isFlowArray && char === '}' && braceDepth > 0) {
+      } else if (isFlowArray && balancedBraceClosers.has(braceIndex)) {
         braceDepth--;
         canStartQuote = false;
       } else if (char === ',' && isFlowArray && braceDepth === 0) {

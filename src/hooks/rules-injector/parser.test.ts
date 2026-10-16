@@ -161,6 +161,13 @@ describe('parseRuleFrontmatter trailing comments', () => {
     expect(parse(escapedBracketArray).globs).toEqual([String.raw`src/\[`, 'docs/ #notes/**']);
   });
 
+  it('recognizes quoted items after unmatched brace globs', () => {
+    expect(parse('globs: [a{b.ts, "docs/ #notes/**"] # both').globs).toEqual([
+      'a{b.ts',
+      'docs/ #notes/**',
+    ]);
+  });
+
   it('does not start comments after Unicode whitespace inside an unquoted glob', () => {
     const nbsp = '\u00a0';
 
