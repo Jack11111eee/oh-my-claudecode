@@ -98,6 +98,18 @@ function isSingleQuoteEscapeAtItemEnd(
   );
 }
 
+function isClosingSingleQuoteBeforeComment(value: string, backslashIndex: number): boolean {
+  let commentIndex = backslashIndex + 2;
+  if (value[commentIndex] !== ' ' && value[commentIndex] !== '\t') return false;
+  while (commentIndex < value.length && (value[commentIndex] === ' ' || value[commentIndex] === '\t')) {
+    commentIndex++;
+  }
+  return (
+    value[commentIndex] === '#' &&
+    (commentIndex + 1 === value.length || value[commentIndex + 1] === ' ' || value[commentIndex + 1] === '\t')
+  );
+}
+
 interface ParserScanIndex {
   readonly nextNonWhitespace: Int32Array;
   readonly matchingQuoteEnd: Int32Array;
@@ -347,7 +359,7 @@ function findFlowArrayClosingIndex(value: string, openerIndex: number): number {
           : 0;
   }
 
-  const scanIndex = createParserScanIndex(value, suffixIsCommentOrPadding, openerIndex);
+  let scanIndex: ParserScanIndex | undefined;
   let quoteChar = '';
   let canStartQuote = true;
   const braceStack: number[] = [];
@@ -376,11 +388,11 @@ function findFlowArrayClosingIndex(value: string, openerIndex: number): number {
       canStartQuote = false;
     } else if (char === ']' && suffixIsCommentOrPadding[i + 1]) {
       return i;
-    } else if (
-      char === ',' &&
-      isFlowItemBoundaryAtComma(value, i, braceStack, scanIndex)
-    ) {
+    } else if (char === ',' && braceStack.length === 0) {
       canStartQuote = true;
+    } else if (char === ',' && braceStack.length > 0) {
+      scanIndex ??= createParserScanIndex(value, suffixIsCommentOrPadding, openerIndex);
+      canStartQuote = isFlowItemBoundaryAtComma(value, i, braceStack, scanIndex);
     } else if (!/\s/.test(char)) {
       canStartQuote = false;
     }
@@ -413,7 +425,18 @@ function stripTrailingComment(value: string): string {
   for (let i = 0; i < value.length; i++) {
     const char = value[i];
     if (quoteChar) {
-      if (quoteChar === "'" && char === '\\' && value[i + 1] === "'" && value[i + 2] === "'") {
+      if (
+        quoteChar === "'" &&
+        char === '\\' &&
+        value[i + 1] === "'" &&
+        value[i + 2] !== "'" &&
+        !isFlowArray &&
+        isClosingSingleQuoteBeforeComment(value, i)
+      ) {
+        quoteChar = '';
+        i++;
+        canStartQuote = false;
+      } else if (quoteChar === "'" && char === '\\' && value[i + 1] === "'" && value[i + 2] === "'") {
         if (isSingleQuoteEscapeAtItemEnd(value, i, !isFlowArray)) i++;
         canStartQuote = false;
       } else if (char === '\\' && i + 1 < value.length) i++;
@@ -597,7 +620,7 @@ function findBalancedBraceIndices(
   const openings = new Set<number>();
   const closings = new Set<number>();
   const stack: number[] = [];
-  const scanIndex = createParserScanIndex(value);
+  let scanIndex: ParserScanIndex | undefined;
   let quoteChar = '';
   let canStartQuote = true;
 
@@ -631,12 +654,11 @@ function findBalancedBraceIndices(
       openings.add(stack.pop()!);
       closings.add(i);
       canStartQuote = false;
-    } else if (
-      char === ',' &&
-      (stack.length === 0 ||
-        (respectQuotes && isFlowItemBoundaryAtComma(value, i, stack, scanIndex)))
-    ) {
+    } else if (char === ',' && stack.length === 0) {
       canStartQuote = true;
+    } else if (char === ',' && respectQuotes && stack.length > 0) {
+      scanIndex ??= createParserScanIndex(value);
+      canStartQuote = isFlowItemBoundaryAtComma(value, i, stack, scanIndex);
     } else if (!/\s/.test(char)) {
       canStartQuote = false;
     }

@@ -314,6 +314,9 @@ describe('parseRuleFrontmatter trailing comments', () => {
     );
     expect(parse(String.raw`globs: 'docs/foo\'' # 'legacy'`).globs).toBe(String.raw`docs/foo\'`);
     expect(parse(String.raw`globs: 'docs/foo\'' # users'`).globs).toBe(String.raw`docs/foo\'`);
+    expect(parse(String.raw`globs: 'docs/foo\' # docs`).globs).toBe('docs/foo\\');
+    expect(parse(String.raw`globs: 'docs/foo\' # users'`).globs).toBe('docs/foo\\');
+    expect(parse(`globs:\n  - 'docs/foo\\' # docs`).globs).toEqual(['docs/foo\\']);
   });
 
   it('parses a large brace-free inline array value', () => {
