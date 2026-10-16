@@ -192,6 +192,13 @@ describe('parseRuleFrontmatter trailing comments', () => {
     ]);
   });
 
+  it('keeps balanced brace groups across quoted alternatives', () => {
+    expect(parse(`globs: [src/{foo,'bar',baz}, docs/**]`).globs).toEqual([
+      "src/{foo,'bar',baz}",
+      'docs/**',
+    ]);
+  });
+
   it('keeps brace-alternative quotes out of flow item boundaries', () => {
     const inlineArray = String.raw`globs: [src/{foo,'bar}, "docs/ #notes/**"] # see ]`;
     expect(parse(inlineArray).globs).toEqual(["src/{foo,'bar}", 'docs/ #notes/**']);

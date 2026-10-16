@@ -146,29 +146,87 @@ function hasTerminalSingleQuoteAfterComment(
   return false;
 }
 
-function isQuotedFlowItemAfterComma(value: string, commaIndex: number): boolean {
-  let quoteIndex = commaIndex + 1;
-  while (quoteIndex < value.length && /\s/.test(value[quoteIndex])) quoteIndex++;
+function findMatchingQuoteIndex(value: string, quoteIndex: number): number {
   const quoteChar = value[quoteIndex];
-  if (quoteChar !== '"' && quoteChar !== "'") return false;
+  if (quoteChar !== '"' && quoteChar !== "'") return -1;
 
-  let closingQuoteIndex = -1;
   for (let i = quoteIndex + 1; i < value.length; i++) {
     const char = value[i];
     if (char === '\\' && i + 1 < value.length) i++;
     else if (quoteChar === "'" && char === "'" && value[i + 1] === "'") i++;
-    else if (char === quoteChar) {
-      closingQuoteIndex = i;
-      break;
-    }
+    else if (char === quoteChar) return i;
   }
-  if (closingQuoteIndex === -1) return false;
+  return -1;
+}
+
+function findQuotedFlowItemEndAfterComma(value: string, commaIndex: number): number {
+  let quoteIndex = commaIndex + 1;
+  while (quoteIndex < value.length && /\s/.test(value[quoteIndex])) quoteIndex++;
+  const closingQuoteIndex = findMatchingQuoteIndex(value, quoteIndex);
+  if (closingQuoteIndex === -1) return -1;
 
   let boundaryIndex = closingQuoteIndex + 1;
   while (boundaryIndex < value.length && /\s/.test(value[boundaryIndex])) boundaryIndex++;
-  return (
-    boundaryIndex === value.length || value[boundaryIndex] === ',' || value[boundaryIndex] === ']'
+  return boundaryIndex === value.length || value[boundaryIndex] === ',' || value[boundaryIndex] === ']'
+    ? closingQuoteIndex
+    : -1;
+}
+
+function findBraceGroupClosingAfterQuotedItem(
+  value: string,
+  quoteEndIndex: number,
+  initialDepth: number,
+  suffixIsCommentOrPadding?: Uint8Array
+): number {
+  let depth = initialDepth;
+  for (let i = quoteEndIndex + 1; i < value.length; i++) {
+    const char = value[i];
+    if (char === '\\' && i + 1 < value.length) {
+      i++;
+    } else if (char === '"' || char === "'") {
+      const closingQuoteIndex = findMatchingQuoteIndex(value, i);
+      if (closingQuoteIndex >= 0) i = closingQuoteIndex;
+    } else if (char === '{') {
+      depth++;
+    } else if (char === '}' && depth > 0) {
+      depth--;
+      if (depth < initialDepth) return i;
+    } else if (char === ']' && suffixIsCommentOrPadding?.[i + 1]) {
+      return -1;
+    }
+  }
+  return -1;
+}
+
+function isFlowItemBoundaryAtComma(
+  value: string,
+  commaIndex: number,
+  braceStack: number[],
+  braceClosingByOpening: Map<number, number>,
+  suffixIsCommentOrPadding?: Uint8Array
+): boolean {
+  if (braceStack.length === 0) return true;
+
+  const openingIndex = braceStack[braceStack.length - 1];
+  const knownClosingIndex = braceClosingByOpening.get(openingIndex);
+  if (knownClosingIndex !== undefined && knownClosingIndex > commaIndex) return false;
+
+  const quoteEndIndex = findQuotedFlowItemEndAfterComma(value, commaIndex);
+  if (quoteEndIndex === -1) return false;
+
+  const closingIndex = findBraceGroupClosingAfterQuotedItem(
+    value,
+    quoteEndIndex,
+    braceStack.length,
+    suffixIsCommentOrPadding
   );
+  if (closingIndex >= 0) {
+    braceClosingByOpening.set(openingIndex, closingIndex);
+    return false;
+  }
+
+  braceStack.length = 0;
+  return true;
 }
 
 function findFlowArrayClosingIndex(value: string, openerIndex: number): number {
@@ -186,7 +244,8 @@ function findFlowArrayClosingIndex(value: string, openerIndex: number): number {
 
   let quoteChar = '';
   let canStartQuote = true;
-  let braceDepth = 0;
+  const braceStack: number[] = [];
+  const braceClosingByOpening = new Map<number, number>();
   for (let i = openerIndex + 1; i < value.length; i++) {
     const char = value[i];
     if (quoteChar) {
@@ -205,18 +264,17 @@ function findFlowArrayClosingIndex(value: string, openerIndex: number): number {
       i++;
       canStartQuote = false;
     } else if (char === '{') {
-      braceDepth++;
+      braceStack.push(i);
       canStartQuote = false;
-    } else if (char === '}' && braceDepth > 0) {
-      braceDepth--;
+    } else if (char === '}' && braceStack.length > 0) {
+      braceStack.pop();
       canStartQuote = false;
     } else if (char === ']' && suffixIsCommentOrPadding[i + 1]) {
       return i;
     } else if (
       char === ',' &&
-      (braceDepth === 0 || isQuotedFlowItemAfterComma(value, i))
+      isFlowItemBoundaryAtComma(value, i, braceStack, braceClosingByOpening, suffixIsCommentOrPadding)
     ) {
-      braceDepth = 0;
       canStartQuote = true;
     } else if (!/\s/.test(char)) {
       canStartQuote = false;
@@ -436,6 +494,7 @@ function findBalancedBraceIndices(
   const openings = new Set<number>();
   const closings = new Set<number>();
   const stack: number[] = [];
+  const braceClosingByOpening = new Map<number, number>();
   let quoteChar = '';
   let canStartQuote = true;
 
@@ -471,9 +530,8 @@ function findBalancedBraceIndices(
       canStartQuote = false;
     } else if (
       char === ',' &&
-      (stack.length === 0 || isQuotedFlowItemAfterComma(value, i))
+      isFlowItemBoundaryAtComma(value, i, stack, braceClosingByOpening)
     ) {
-      stack.length = 0;
       canStartQuote = true;
     } else if (!/\s/.test(char)) {
       canStartQuote = false;
