@@ -89,6 +89,13 @@ describe('parseRuleFrontmatter brace globs', () => {
     ]);
   });
 
+  it('handles deeply nested brace alternatives with quote-looking items', () => {
+    const depth = 128;
+    const pattern = `src/${'{a,"quoted",'.repeat(depth)}leaf${'}'.repeat(depth)}`;
+
+    expect(parseGlobs(`globs: [${pattern}, docs/**]`)).toEqual([pattern, 'docs/**']);
+  });
+
   it('preserves escaped literal brace globs in a block array', () => {
     const literalGlob = String.raw`fixtures/\{a,b\}.json`;
     const { metadata } = parseRuleFrontmatter(`---\nglobs:\n  - '${literalGlob}'\n---\nbody`);
@@ -202,6 +209,13 @@ describe('parseRuleFrontmatter trailing comments', () => {
   it('keeps brace-alternative quotes out of flow item boundaries', () => {
     const inlineArray = String.raw`globs: [src/{foo,'bar}, "docs/ #notes/**"] # see ]`;
     expect(parse(inlineArray).globs).toEqual(["src/{foo,'bar}", 'docs/ #notes/**']);
+  });
+
+  it('keeps a brace-alternative quote from consuming a later glob character class', () => {
+    expect(parse(`globs: [src/{foo,'bar}, docs/[']*.md]`).globs).toEqual([
+      "src/{foo,'bar}",
+      "docs/[']*.md",
+    ]);
   });
 
   it('does not pair braces across doubled apostrophes in quoted items', () => {
