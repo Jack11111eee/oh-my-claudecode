@@ -99,7 +99,7 @@ function stripTrailingComment(value: string): string {
     for (let i = 0; i < hashIndex; i++) {
       const char = value[i];
       if (quoteChar) {
-        if (char === '\\' && quoteChar === '"') i++;
+        if (char === '\\' && i + 1 < hashIndex) i++;
         else if (char === "'" && quoteChar === "'" && value[i + 1] === "'") i++;
         else if (char === quoteChar) {
           quoteChar = '';

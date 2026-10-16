@@ -180,6 +180,7 @@ describe('parseRuleFrontmatter trailing comments', () => {
   it('keeps hashes after escaped quote delimiters and strips outside comments', () => {
     const escapedDoubleQuote = String.raw`docs/\" #notes/**`;
     const escapedSingleQuote = "docs/'' #notes/**";
+    const backslashEscapedSingleQuote = String.raw`docs/\' #notes/**`;
 
     expect(parse(`globs: "${escapedDoubleQuote}" # trailing comment`).globs).toBe(escapedDoubleQuote);
     expect(
@@ -190,6 +191,12 @@ describe('parseRuleFrontmatter trailing comments', () => {
       escapedSingleQuote,
       'src/**',
     ]);
+    expect(parse(`globs: '${backslashEscapedSingleQuote}' # trailing comment`).globs).toBe(
+      backslashEscapedSingleQuote,
+    );
+    expect(
+      parse(`globs: ['${backslashEscapedSingleQuote}', 'src/**'] # trailing comment`).globs,
+    ).toEqual([backslashEscapedSingleQuote, 'src/**']);
   });
 });
 
