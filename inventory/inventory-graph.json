@@ -5,15 +5,15 @@
   "provenance": {
     "base": "05c800f40d1ad53b42a78609d2667ef4f726808b",
     "planningHead": "0a91273e61dbbd47eb0af4c02844409251e08398",
-    "head": "80d46a5381c6b585806722aa1b3d5ec3c44eead9",
-    "sourceSha256": "afaa3e287e82cb441df83207d61054d985c2b084e9a4f8170956693a0388d4af",
+    "head": "674f8e200ae8447b54b0dc6de8746063585ab59d",
+    "sourceSha256": "b5ea8de800ea0492bf7fac9f60c227557f33de8eaed32660e36136503defb146",
     "generatedAt": null,
     "generator": "scripts/generate-inventory-graph.mjs"
   },
   "base": "05c800f40d1ad53b42a78609d2667ef4f726808b",
   "planningHead": "0a91273e61dbbd47eb0af4c02844409251e08398",
-  "head": "80d46a5381c6b585806722aa1b3d5ec3c44eead9",
-  "sourceSha256": "afaa3e287e82cb441df83207d61054d985c2b084e9a4f8170956693a0388d4af",
+  "head": "674f8e200ae8447b54b0dc6de8746063585ab59d",
+  "sourceSha256": "b5ea8de800ea0492bf7fac9f60c227557f33de8eaed32660e36136503defb146",
   "counts": {
     "public": {
       "skills": 48,
@@ -28,8 +28,8 @@
       "toolFiles": 65,
       "libFiles": 48,
       "templateHooks": 24,
-      "srcFiles": 1472,
-      "total": 1496
+      "srcFiles": 1473,
+      "total": 1497
     },
     "generated": {
       "distFiles": 5613,
@@ -44057,6 +44057,11 @@
         "path": "src/team/__tests__/issue-4261-cmux-team-failures.test.ts"
       },
       {
+        "id": "src/team/__tests__/issue-4412-cmux-startup.test.ts",
+        "kind": "src",
+        "path": "src/team/__tests__/issue-4412-cmux-startup.test.ts"
+      },
+      {
         "id": "src/team/__tests__/leader-inbox.test.ts",
         "kind": "src",
         "path": "src/team/__tests__/leader-inbox.test.ts"
@@ -78304,6 +78309,36 @@
         "kind": "type-imports"
       },
       {
+        "from": "src/team/__tests__/issue-4412-cmux-startup.test.ts",
+        "to": "external:node:fs/promises",
+        "kind": "imports"
+      },
+      {
+        "from": "src/team/__tests__/issue-4412-cmux-startup.test.ts",
+        "to": "external:node:os",
+        "kind": "imports"
+      },
+      {
+        "from": "src/team/__tests__/issue-4412-cmux-startup.test.ts",
+        "to": "external:node:path",
+        "kind": "imports"
+      },
+      {
+        "from": "src/team/__tests__/issue-4412-cmux-startup.test.ts",
+        "to": "external:vitest",
+        "kind": "imports"
+      },
+      {
+        "from": "src/team/__tests__/issue-4412-cmux-startup.test.ts",
+        "to": "src/team/model-contract.ts",
+        "kind": "imports"
+      },
+      {
+        "from": "src/team/__tests__/issue-4412-cmux-startup.test.ts",
+        "to": "src/team/tmux-session.ts",
+        "kind": "imports"
+      },
+      {
         "from": "src/team/__tests__/leader-inbox.test.ts",
         "to": "external:fs",
         "kind": "imports"
@@ -81431,6 +81466,11 @@
       {
         "from": "src/team/__tests__/worker-launch-ack.test.ts",
         "to": "src/platform/process-utils.ts",
+        "kind": "imports"
+      },
+      {
+        "from": "src/team/__tests__/worker-launch-ack.test.ts",
+        "to": "src/team/model-contract.ts",
         "kind": "imports"
       },
       {
@@ -88695,12 +88735,12 @@
       }
     ],
     "stats": {
-      "nodeCount": 7747,
-      "edgeCount": 8567,
-      "importEdgeCount": 7117,
+      "nodeCount": 7748,
+      "edgeCount": 8574,
+      "importEdgeCount": 7124,
       "registerEdgeCount": 69
     }
   },
-  "inventorySha256": "8263938ef3904d69821e499dc339bbf56d8b9658c6b93902c89177120d703ffa",
-  "manifestSha256": "2d38b66a0a542fc355a7a60227ff4d03d49c2917871e3b73a1c689ab3af7042d"
+  "inventorySha256": "5612873febf29f029957c6cad4772815ec898dac0f5458446aac108a2e015a3f",
+  "manifestSha256": "c5e47365f49c644117afa06d472bd5c957669cc0499a3c02d743e1b2b64f9656"
 }
