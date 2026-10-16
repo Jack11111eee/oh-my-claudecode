@@ -82,10 +82,10 @@ function parseYamlContent(yamlContent: string): RuleMetadata {
  * comment at the start of the value or after a YAML space/tab, never inside quotes.
  */
 function stripTrailingComment(value: string): string {
-  const isFlowArray = value.trimStart().startsWith('[');
+  const flowArrayOpenerIndex = value.search(/[^ \t]/);
+  const isFlowArray = flowArrayOpenerIndex >= 0 && value[flowArrayOpenerIndex] === '[';
   let quoteChar = '';
   let canStartQuote = true;
-  let flowDepth = 0;
   let braceDepth = 0;
   for (let i = 0; i < value.length; i++) {
     const char = value[i];
@@ -98,25 +98,24 @@ function stripTrailingComment(value: string): string {
       }
     } else if ((char === '"' || char === "'") && canStartQuote) {
       quoteChar = char;
+    } else if (char === '\\' && i + 1 < value.length) {
+      i++;
+      canStartQuote = false;
     } else if (
       char === '#' &&
       (i === 0 || value[i - 1] === ' ' || value[i - 1] === '\t')
     ) {
       return value.slice(0, i).trim();
     } else {
-      if (isFlowArray && char === '[') {
-        flowDepth++;
-        canStartQuote = flowDepth === 1;
-      } else if (isFlowArray && char === ']' && flowDepth > 0) {
-        flowDepth--;
-        canStartQuote = false;
+      if (isFlowArray && i === flowArrayOpenerIndex) {
+        canStartQuote = true;
       } else if (isFlowArray && char === '{') {
         braceDepth++;
         canStartQuote = false;
       } else if (isFlowArray && char === '}' && braceDepth > 0) {
         braceDepth--;
         canStartQuote = false;
-      } else if (char === ',' && isFlowArray && flowDepth === 1 && braceDepth === 0) {
+      } else if (char === ',' && isFlowArray && braceDepth === 0) {
         canStartQuote = true;
       } else if (char !== ' ' && char !== '\t') {
         canStartQuote = false;

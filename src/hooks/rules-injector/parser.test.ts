@@ -156,6 +156,9 @@ describe('parseRuleFrontmatter trailing comments', () => {
 
     const inlineArray = String.raw`globs: [docs/[']*.md, "src/**"] # both`;
     expect(parse(inlineArray).globs).toEqual(["docs/[']*.md", 'src/**']);
+
+    const escapedBracketArray = String.raw`globs: [src/\[, "docs/ #notes/**"] # both`;
+    expect(parse(escapedBracketArray).globs).toEqual([String.raw`src/\[`, 'docs/ #notes/**']);
   });
 
   it('does not start comments after Unicode whitespace inside an unquoted glob', () => {
