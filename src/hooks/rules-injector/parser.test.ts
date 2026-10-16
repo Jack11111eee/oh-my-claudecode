@@ -210,6 +210,7 @@ describe('parseRuleFrontmatter trailing comments', () => {
     const escapedSingleQuote = "docs/'' #notes/**";
     const backslashEscapedSingleQuote = String.raw`docs/\' #notes/**`;
     const backslashBeforeDoubledApostrophe = String.raw`docs/\'' #notes/**`;
+    const terminalBackslashEscapedApostrophe = String.raw`globs: ['docs/foo\'', 'src/**'] # both`;
 
     expect(parse(`globs: "${escapedDoubleQuote}" # trailing comment`).globs).toBe(escapedDoubleQuote);
     expect(
@@ -229,6 +230,10 @@ describe('parseRuleFrontmatter trailing comments', () => {
     expect(
       parse(`globs: ['${backslashBeforeDoubledApostrophe}', 'src/**'] # trailing comment`).globs,
     ).toEqual([backslashBeforeDoubledApostrophe, 'src/**']);
+    expect(parse(terminalBackslashEscapedApostrophe).globs).toEqual([
+      String.raw`docs/foo\'`,
+      'src/**',
+    ]);
   });
 });
 

@@ -83,6 +83,14 @@ function parseYamlContent(yamlContent: string): RuleMetadata {
  * Trim a YAML value and drop a trailing ` # comment`. A `#` only starts a
  * comment at the start of the value or after a YAML space/tab, never inside quotes.
  */
+function isSingleQuoteEscapeAtItemEnd(value: string, backslashIndex: number): boolean {
+  let nextIndex = backslashIndex + 3;
+  while (nextIndex < value.length && /\s/.test(value[nextIndex])) nextIndex++;
+  return (
+    nextIndex === value.length || value[nextIndex] === ',' || value[nextIndex] === ']'
+  );
+}
+
 function findFlowArrayClosingIndex(value: string, openerIndex: number): number {
   const suffixIsCommentOrPadding = new Uint8Array(value.length + 1);
   suffixIsCommentOrPadding[value.length] = 1;
@@ -98,12 +106,8 @@ function findFlowArrayClosingIndex(value: string, openerIndex: number): number {
   for (let i = openerIndex + 1; i < value.length; i++) {
     const char = value[i];
     if (quoteChar) {
-      if (
-        quoteChar === "'" &&
-        char === '\\' &&
-        value[i + 1] === "'" &&
-        value[i + 2] === "'"
-      ) {
+      if (quoteChar === "'" && char === '\\' && value[i + 1] === "'" && value[i + 2] === "'") {
+        if (isSingleQuoteEscapeAtItemEnd(value, i)) i++;
         canStartQuote = false;
       } else if (char === '\\' && i + 1 < value.length) i++;
       else if (char === "'" && quoteChar === "'" && value[i + 1] === "'") i++;
@@ -154,12 +158,8 @@ function stripTrailingComment(value: string): string {
   for (let i = 0; i < value.length; i++) {
     const char = value[i];
     if (quoteChar) {
-      if (
-        quoteChar === "'" &&
-        char === '\\' &&
-        value[i + 1] === "'" &&
-        value[i + 2] === "'"
-      ) {
+      if (quoteChar === "'" && char === '\\' && value[i + 1] === "'" && value[i + 2] === "'") {
+        if (isSingleQuoteEscapeAtItemEnd(value, i)) i++;
         canStartQuote = false;
       } else if (char === '\\' && i + 1 < value.length) i++;
       else if (char === "'" && quoteChar === "'" && value[i + 1] === "'") i++;
@@ -288,6 +288,7 @@ function splitOutsideBraces(value: string, respectQuotes = false): string[] {
     if (respectQuotes && quoteChar) {
       if (quoteChar === "'" && char === '\\' && value[i + 1] === "'" && value[i + 2] === "'") {
         current += char;
+        if (isSingleQuoteEscapeAtItemEnd(value, i)) current += value[++i];
         continue;
       }
       if (char === '\\' && i + 1 < value.length) {
@@ -348,6 +349,7 @@ function findBalancedBraceIndices(
     const char = value[i];
     if (respectQuotes && quoteChar) {
       if (quoteChar === "'" && char === '\\' && value[i + 1] === "'" && value[i + 2] === "'") {
+        if (isSingleQuoteEscapeAtItemEnd(value, i)) i++;
         canStartQuote = false;
       } else if (char === '\\' && i + 1 < value.length) {
         i++;
