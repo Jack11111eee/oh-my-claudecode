@@ -150,18 +150,17 @@ interface ParserScanIndex {
   readonly nextNonWhitespace: Int32Array;
   readonly matchingQuoteEnd: Int32Array;
   readonly suffixIsCommentOrPadding?: Uint8Array;
-  readonly braceJumps: Int32Array[];
-  readonly braceSums: Int32Array[];
-  readonly braceMinimums: Int32Array[];
+  readonly flowQuoteStarts: Set<number>;
 }
 
 /**
- * Index quote matches and brace-suffix summaries once. Binary-lifted brace
- * summaries make each boundary probe logarithmic instead of rescanning a suffix.
+ * Index quote matches and genuine flow-item quote starts once. Brace matching
+ * uses linear scans and only allocates brace state when braces exist.
  */
 function createParserScanIndex(
   value: string,
-  suffixIsCommentOrPadding?: Uint8Array
+  suffixIsCommentOrPadding?: Uint8Array,
+  flowArrayOpenerIndex = -1
 ): ParserScanIndex {
   const length = value.length;
   const nextNonWhitespace = new Int32Array(length + 1);
@@ -199,23 +198,62 @@ function createParserScanIndex(
     else if (char === "'") matchingQuoteEnd[i] = nextSingleQuote[i + 1];
   }
 
-  const firstBraceJump = new Int32Array(length + 1);
-  const firstBraceSum = new Int32Array(length + 1);
-  const firstBraceMinimum = new Int32Array(length + 1);
-  firstBraceJump[length] = length;
+  const flowQuoteStarts = findFlowQuoteStarts(
+    value,
+    nextNonWhitespace,
+    matchingQuoteEnd,
+    suffixIsCommentOrPadding,
+    flowArrayOpenerIndex
+  );
 
+  return {
+    nextNonWhitespace,
+    matchingQuoteEnd,
+    suffixIsCommentOrPadding,
+    flowQuoteStarts,
+  };
+}
+
+function findFlowQuoteStarts(
+  value: string,
+  nextNonWhitespace: Int32Array,
+  matchingQuoteEnd: Int32Array,
+  suffixIsCommentOrPadding?: Uint8Array,
+  flowArrayOpenerIndex = -1
+): Set<number> {
+  const length = value.length;
+  const hasBraces = value.includes('{') || value.includes('}');
+  const flowQuoteStarts = new Set<number>();
+  if (!hasBraces) return flowQuoteStarts;
+
+  const braceClosingByOpening = new Map<number, number>();
+  const nextWhitespaceSeparatedHash = new Int32Array(length + 1);
+  const braceStack: number[] = [];
+  let canStartQuote = true;
+
+  nextWhitespaceSeparatedHash[length] = length;
   for (let i = length - 1; i >= 0; i--) {
-    const char = value[i];
-    let nextIndex = i + 1;
-    let braceDelta = 0;
+    nextWhitespaceSeparatedHash[i] =
+      value[i] === '#' && (value[i - 1] === ' ' || value[i - 1] === '\t')
+        ? i
+        : nextWhitespaceSeparatedHash[i + 1];
+  }
 
-    if (char === ']' && suffixIsCommentOrPadding?.[i + 1]) {
-      nextIndex = length;
-    } else if (char === '\\' && i + 1 < length) {
-      nextIndex = i + 2;
-    } else if (char === '"' || char === "'") {
+  // First pair braces while honoring unambiguous quotes at YAML item boundaries.
+  // Quotes inside a brace glob are deliberately treated as literal punctuation.
+  for (let i = 0; i < length; i++) {
+    const char = value[i];
+    if (char === ']' && suffixIsCommentOrPadding?.[i + 1]) break;
+    if (i === flowArrayOpenerIndex) {
+      canStartQuote = true;
+      continue;
+    }
+    if (
+      canStartQuote &&
+      braceStack.length === 0 &&
+      (char === '"' || char === "'")
+    ) {
       const quoteEndIndex = matchingQuoteEnd[i];
-      // A context-free pair can cross a brace closer into a later array item.
       if (
         quoteEndIndex >= 0 &&
         hasFlowItemBoundaryAfterQuote(
@@ -225,54 +263,79 @@ function createParserScanIndex(
           suffixIsCommentOrPadding
         )
       ) {
-        nextIndex = quoteEndIndex + 1;
+        flowQuoteStarts.add(i);
+        i = quoteEndIndex;
+        canStartQuote = false;
+        continue;
       }
+    }
+
+    if (char === '\\' && i + 1 < length) {
+      i++;
+      canStartQuote = false;
     } else if (char === '{') {
-      braceDelta = 1;
-    } else if (char === '}') {
-      braceDelta = -1;
+      braceStack.push(i);
+      canStartQuote = false;
+    } else if (char === '}' && braceStack.length > 0) {
+      const openingIndex = braceStack.pop()!;
+      braceClosingByOpening.set(openingIndex, i);
+      canStartQuote = false;
+    } else if (char === ',' && braceStack.length === 0) {
+      canStartQuote = true;
+    } else if (!/\s/.test(char)) {
+      canStartQuote = false;
     }
-
-    firstBraceJump[i] = nextIndex;
-    firstBraceSum[i] = braceDelta;
-    firstBraceMinimum[i] = braceDelta;
   }
 
-  const braceJumps = [firstBraceJump];
-  const braceSums = [firstBraceSum];
-  const braceMinimums = [firstBraceMinimum];
-  const levelCount = Math.max(1, Math.ceil(Math.log2(length + 1)));
-
-  // Each level summarizes twice as many tokens: the next index, net brace
-  // depth change, and lowest prefix depth encountered by that token sequence.
-  for (let level = 1; level < levelCount; level++) {
-    const previousJump = braceJumps[level - 1];
-    const previousSum = braceSums[level - 1];
-    const previousMinimum = braceMinimums[level - 1];
-    const jump = new Int32Array(length + 1);
-    const sum = new Int32Array(length + 1);
-    const minimum = new Int32Array(length + 1);
-
-    for (let i = 0; i <= length; i++) {
-      const middle = previousJump[i];
-      jump[i] = previousJump[middle];
-      sum[i] = previousSum[i] + previousSum[middle];
-      minimum[i] = Math.min(previousMinimum[i], previousSum[i] + previousMinimum[middle]);
+  // Recover quoted YAML items after unmatched brace openers. A raw closer in a
+  // candidate quote means the quote is literal inside a balanced brace group;
+  // an embedded whitespace-separated hash still permits recovery because it
+  // would otherwise be consumed as a YAML comment.
+  braceStack.length = 0;
+  for (let i = 0; i < length; i++) {
+    const char = value[i];
+    if (char === ']' && suffixIsCommentOrPadding?.[i + 1]) break;
+    if (flowQuoteStarts.has(i)) {
+      const quoteEndIndex = matchingQuoteEnd[i];
+      if (quoteEndIndex >= i) i = quoteEndIndex;
+      continue;
     }
-
-    braceJumps.push(jump);
-    braceSums.push(sum);
-    braceMinimums.push(minimum);
+    if (char === '\\' && i + 1 < length) {
+      i++;
+    } else if (char === '{') {
+      braceStack.push(i);
+    } else if (char === '}' && braceStack.length > 0) {
+      braceStack.pop();
+    } else if (char === ',' && braceStack.length > 0) {
+      const quoteIndex = nextNonWhitespace[i + 1];
+      const quoteChar = value[quoteIndex];
+      const quoteEndIndex = matchingQuoteEnd[quoteIndex];
+      if (
+        (quoteChar === '"' || quoteChar === "'") &&
+        quoteEndIndex >= 0 &&
+        hasFlowItemBoundaryAfterQuote(
+          value,
+          quoteEndIndex,
+          nextNonWhitespace,
+          suffixIsCommentOrPadding
+        )
+      ) {
+        const openingIndex = braceStack[braceStack.length - 1];
+        const closingIndex = braceClosingByOpening.get(openingIndex);
+        const closerIsInsideQuote = closingIndex !== undefined && closingIndex <= quoteEndIndex;
+        const hashIndex = nextWhitespaceSeparatedHash[quoteIndex + 1];
+        if (
+          closingIndex === undefined ||
+          (closerIsInsideQuote && hashIndex < quoteEndIndex)
+        ) {
+          flowQuoteStarts.add(quoteIndex);
+          braceStack.length = 0;
+        }
+      }
+    }
   }
 
-  return {
-    nextNonWhitespace,
-    matchingQuoteEnd,
-    suffixIsCommentOrPadding,
-    braceJumps,
-    braceSums,
-    braceMinimums,
-  };
+  return flowQuoteStarts;
 }
 
 function hasFlowItemBoundaryAfterQuote(
@@ -294,7 +357,8 @@ function findQuotedFlowItemEndAfterComma(
 ): number {
   const quoteIndex = scanIndex.nextNonWhitespace[commaIndex + 1];
   const closingQuoteIndex = scanIndex.matchingQuoteEnd[quoteIndex] ?? -1;
-  return closingQuoteIndex >= 0 &&
+  return scanIndex.flowQuoteStarts.has(quoteIndex) &&
+    closingQuoteIndex >= 0 &&
     hasFlowItemBoundaryAfterQuote(
       value,
       closingQuoteIndex,
@@ -305,47 +369,15 @@ function findQuotedFlowItemEndAfterComma(
     : -1;
 }
 
-function findBraceGroupClosingAfterQuotedItem(
-  value: string,
-  quoteEndIndex: number,
-  scanIndex: ParserScanIndex
-): number {
-  let cursor = quoteEndIndex + 1;
-  let depth = 0;
-
-  for (let level = scanIndex.braceJumps.length - 1; level >= 0; level--) {
-    const minimum = scanIndex.braceMinimums[level][cursor];
-    if (depth + minimum >= 0) {
-      depth += scanIndex.braceSums[level][cursor];
-      cursor = scanIndex.braceJumps[level][cursor];
-    }
-  }
-
-  return cursor < value.length && value[cursor] === '}' ? cursor : -1;
-}
-
 function isFlowItemBoundaryAtComma(
   value: string,
   commaIndex: number,
   braceStack: number[],
-  braceClosingByOpening: Map<number, number>,
   scanIndex: ParserScanIndex
 ): boolean {
   if (braceStack.length === 0) return true;
-
-  const openingIndex = braceStack[braceStack.length - 1];
-  const knownClosingIndex = braceClosingByOpening.get(openingIndex);
-  if (knownClosingIndex !== undefined && knownClosingIndex > commaIndex) return false;
-
   const quoteEndIndex = findQuotedFlowItemEndAfterComma(value, commaIndex, scanIndex);
   if (quoteEndIndex === -1) return false;
-
-  const closingIndex = findBraceGroupClosingAfterQuotedItem(value, quoteEndIndex, scanIndex);
-  if (closingIndex >= 0) {
-    braceClosingByOpening.set(openingIndex, closingIndex);
-    return false;
-  }
-
   braceStack.length = 0;
   return true;
 }
@@ -363,11 +395,10 @@ function findFlowArrayClosingIndex(value: string, openerIndex: number): number {
           : 0;
   }
 
-  const scanIndex = createParserScanIndex(value, suffixIsCommentOrPadding);
+  const scanIndex = createParserScanIndex(value, suffixIsCommentOrPadding, openerIndex);
   let quoteChar = '';
   let canStartQuote = true;
   const braceStack: number[] = [];
-  const braceClosingByOpening = new Map<number, number>();
   for (let i = openerIndex + 1; i < value.length; i++) {
     const char = value[i];
     if (quoteChar) {
@@ -395,7 +426,7 @@ function findFlowArrayClosingIndex(value: string, openerIndex: number): number {
       return i;
     } else if (
       char === ',' &&
-      isFlowItemBoundaryAtComma(value, i, braceStack, braceClosingByOpening, scanIndex)
+      isFlowItemBoundaryAtComma(value, i, braceStack, scanIndex)
     ) {
       canStartQuote = true;
     } else if (!/\s/.test(char)) {
@@ -616,7 +647,6 @@ function findBalancedBraceIndices(
   const openings = new Set<number>();
   const closings = new Set<number>();
   const stack: number[] = [];
-  const braceClosingByOpening = new Map<number, number>();
   const scanIndex = createParserScanIndex(value);
   let quoteChar = '';
   let canStartQuote = true;
@@ -653,7 +683,7 @@ function findBalancedBraceIndices(
       canStartQuote = false;
     } else if (
       char === ',' &&
-      isFlowItemBoundaryAtComma(value, i, stack, braceClosingByOpening, scanIndex)
+      isFlowItemBoundaryAtComma(value, i, stack, scanIndex)
     ) {
       canStartQuote = true;
     } else if (!/\s/.test(char)) {

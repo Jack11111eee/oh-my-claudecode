@@ -216,6 +216,13 @@ describe('parseRuleFrontmatter trailing comments', () => {
     ]);
   });
 
+  it('keeps a brace-closing literal quote pair inside its glob item', () => {
+    expect(parse("globs: [src/{foo,'bar}', docs/**]").globs).toEqual([
+      "src/{foo,'bar}'",
+      'docs/**',
+    ]);
+  });
+
   it('keeps a literal quote from hiding a balanced brace closer', () => {
     const firstPattern = `src/{a,'x',"}`;
 
@@ -299,6 +306,12 @@ describe('parseRuleFrontmatter trailing comments', () => {
       String.raw`docs/foo\'`,
     );
     expect(parse(String.raw`globs: 'docs/foo\'' # 'legacy'`).globs).toBe(String.raw`docs/foo\'`);
+  });
+
+  it('parses a large brace-free inline array value', () => {
+    const pattern = 'a'.repeat(1024 * 1024);
+
+    expect(parse(`globs: [${pattern}] # x`).globs).toEqual([pattern]);
   });
 });
 
