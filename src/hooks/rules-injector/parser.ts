@@ -104,10 +104,22 @@ function isClosingSingleQuoteBeforeComment(value: string, backslashIndex: number
   while (commentIndex < value.length && (value[commentIndex] === ' ' || value[commentIndex] === '\t')) {
     commentIndex++;
   }
-  return (
-    value[commentIndex] === '#' &&
-    (commentIndex + 1 === value.length || value[commentIndex + 1] === ' ' || value[commentIndex + 1] === '\t')
-  );
+  if (value[commentIndex] !== '#') return false;
+
+  // A compact `#token` after a legacy `\'` can still be quoted glob text; a
+  // later closing quote before another comment marker disambiguates that case.
+  if (value[commentIndex + 1] !== ' ' && value[commentIndex + 1] !== '\t') {
+    for (let i = commentIndex + 1; i < value.length; i++) {
+      if (value[i] !== "'") continue;
+      let nextIndex = i + 1;
+      while (nextIndex < value.length && (value[nextIndex] === ' ' || value[nextIndex] === '\t')) {
+        nextIndex++;
+      }
+      if (nextIndex > i + 1 && value[nextIndex] === '#') return false;
+    }
+  }
+
+  return true;
 }
 
 interface ParserScanIndex {
