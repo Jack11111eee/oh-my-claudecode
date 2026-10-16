@@ -84,15 +84,24 @@ function parseYamlContent(yamlContent: string): RuleMetadata {
  */
 function stripTrailingComment(value: string): string {
   let quoteChar = '';
+  let canStartQuote = true;
   for (let i = 0; i < value.length; i++) {
     const char = value[i];
     if (quoteChar) {
       if (char === '\\' && quoteChar === '"') i++;
-      else if (char === quoteChar) quoteChar = '';
-    } else if ((char === '"' || char === "'") && value.slice(0, i).trim() === '') {
+      else if (char === "'" && quoteChar === "'" && value[i + 1] === "'") i++;
+      else if (char === quoteChar) {
+        quoteChar = '';
+        canStartQuote = false;
+      }
+    } else if ((char === '"' || char === "'") && canStartQuote) {
       quoteChar = char;
     } else if (char === '#' && (i === 0 || /\s/.test(value[i - 1]))) {
       return value.slice(0, i).trim();
+    } else if (char === '[' || char === ',') {
+      canStartQuote = true;
+    } else if (!/\s/.test(char)) {
+      canStartQuote = false;
     }
   }
   return value.trim();
