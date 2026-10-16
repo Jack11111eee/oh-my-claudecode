@@ -98,7 +98,14 @@ function findFlowArrayClosingIndex(value: string, openerIndex: number): number {
   for (let i = openerIndex + 1; i < value.length; i++) {
     const char = value[i];
     if (quoteChar) {
-      if (char === '\\' && i + 1 < value.length) i++;
+      if (
+        quoteChar === "'" &&
+        char === '\\' &&
+        value[i + 1] === "'" &&
+        value[i + 2] === "'"
+      ) {
+        canStartQuote = false;
+      } else if (char === '\\' && i + 1 < value.length) i++;
       else if (char === "'" && quoteChar === "'" && value[i + 1] === "'") i++;
       else if (char === quoteChar) {
         quoteChar = '';
@@ -147,7 +154,14 @@ function stripTrailingComment(value: string): string {
   for (let i = 0; i < value.length; i++) {
     const char = value[i];
     if (quoteChar) {
-      if (char === '\\' && i + 1 < value.length) i++;
+      if (
+        quoteChar === "'" &&
+        char === '\\' &&
+        value[i + 1] === "'" &&
+        value[i + 2] === "'"
+      ) {
+        canStartQuote = false;
+      } else if (char === '\\' && i + 1 < value.length) i++;
       else if (char === "'" && quoteChar === "'" && value[i + 1] === "'") i++;
       else if (char === quoteChar) {
         quoteChar = '';
@@ -271,17 +285,27 @@ function splitOutsideBraces(value: string, respectQuotes = false): string[] {
   let canStartQuote = true;
   for (let i = 0; i < value.length; i++) {
     const char = value[i];
-    if (char === '\\' && i + 1 < value.length) {
-      current += char + value[++i];
-      if (!quoteChar) canStartQuote = false;
-      continue;
-    }
     if (respectQuotes && quoteChar) {
+      if (quoteChar === "'" && char === '\\' && value[i + 1] === "'" && value[i + 2] === "'") {
+        current += char;
+        continue;
+      }
+      if (char === '\\' && i + 1 < value.length) {
+        current += char + value[++i];
+        continue;
+      }
       current += char;
-      if (char === quoteChar) {
+      if (quoteChar === "'" && char === "'" && value[i + 1] === "'") {
+        current += value[++i];
+      } else if (char === quoteChar) {
         quoteChar = '';
         canStartQuote = false;
       }
+      continue;
+    }
+    if (char === '\\' && i + 1 < value.length) {
+      current += char + value[++i];
+      if (!quoteChar) canStartQuote = false;
       continue;
     }
     if (respectQuotes && canStartQuote && (char === '"' || char === "'")) {
@@ -322,16 +346,22 @@ function findBalancedBraceIndices(
 
   for (let i = 0; i < value.length; i++) {
     const char = value[i];
-    if (char === '\\' && i + 1 < value.length) {
-      i++;
-      if (!quoteChar) canStartQuote = false;
-      continue;
-    }
     if (respectQuotes && quoteChar) {
-      if (char === quoteChar) {
+      if (quoteChar === "'" && char === '\\' && value[i + 1] === "'" && value[i + 2] === "'") {
+        canStartQuote = false;
+      } else if (char === '\\' && i + 1 < value.length) {
+        i++;
+      } else if (quoteChar === "'" && char === "'" && value[i + 1] === "'") {
+        i++;
+      } else if (char === quoteChar) {
         quoteChar = '';
         canStartQuote = false;
       }
+      continue;
+    }
+    if (char === '\\' && i + 1 < value.length) {
+      i++;
+      if (!quoteChar) canStartQuote = false;
       continue;
     }
     if (respectQuotes && canStartQuote && (char === '"' || char === "'")) {

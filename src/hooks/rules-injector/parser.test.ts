@@ -182,6 +182,11 @@ describe('parseRuleFrontmatter trailing comments', () => {
     expect(parse(inlineArray).globs).toEqual(["src/{foo,'bar}", 'docs/ #notes/**']);
   });
 
+  it('does not pair braces across doubled apostrophes in quoted items', () => {
+    const inlineArray = String.raw`globs: ['a''{', x}, 'docs/ #notes/**'] # both`;
+    expect(parse(inlineArray).globs).toEqual(["a''{", 'x}', 'docs/ #notes/**']);
+  });
+
   it('does not start comments after Unicode whitespace inside an unquoted glob', () => {
     const nbsp = '\u00a0';
 
@@ -204,6 +209,7 @@ describe('parseRuleFrontmatter trailing comments', () => {
     const escapedDoubleQuote = String.raw`docs/\" #notes/**`;
     const escapedSingleQuote = "docs/'' #notes/**";
     const backslashEscapedSingleQuote = String.raw`docs/\' #notes/**`;
+    const backslashBeforeDoubledApostrophe = String.raw`docs/\'' #notes/**`;
 
     expect(parse(`globs: "${escapedDoubleQuote}" # trailing comment`).globs).toBe(escapedDoubleQuote);
     expect(
@@ -220,6 +226,9 @@ describe('parseRuleFrontmatter trailing comments', () => {
     expect(
       parse(`globs: ['${backslashEscapedSingleQuote}', 'src/**'] # trailing comment`).globs,
     ).toEqual([backslashEscapedSingleQuote, 'src/**']);
+    expect(
+      parse(`globs: ['${backslashBeforeDoubledApostrophe}', 'src/**'] # trailing comment`).globs,
+    ).toEqual([backslashBeforeDoubledApostrophe, 'src/**']);
   });
 });
 
