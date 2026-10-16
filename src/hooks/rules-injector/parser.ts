@@ -79,7 +79,7 @@ function parseYamlContent(yamlContent: string): RuleMetadata {
 
 /**
  * Trim a YAML value and drop a trailing ` # comment`. A `#` only starts a
- * comment at the start of the value or after whitespace, and never inside quotes.
+ * comment at the start of the value or after a YAML space/tab, never inside quotes.
  */
 function stripTrailingComment(value: string): string {
   let quoteChar = '';
@@ -95,11 +95,14 @@ function stripTrailingComment(value: string): string {
       }
     } else if ((char === '"' || char === "'") && canStartQuote) {
       quoteChar = char;
-    } else if (char === '#' && (i === 0 || /\s/.test(value[i - 1]))) {
+    } else if (
+      char === '#' &&
+      (i === 0 || value[i - 1] === ' ' || value[i - 1] === '\t')
+    ) {
       return value.slice(0, i).trim();
     } else if (char === '[' || char === ',') {
       canStartQuote = true;
-    } else if (!/\s/.test(char)) {
+    } else if (char !== ' ' && char !== '\t') {
       canStartQuote = false;
     }
   }

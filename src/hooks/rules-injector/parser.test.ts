@@ -146,6 +146,30 @@ describe('parseRuleFrontmatter trailing comments', () => {
       'src/**',
     ]);
   });
+
+  it('does not start comments after Unicode whitespace inside an unquoted glob', () => {
+    const nbsp = '\u00a0';
+
+    expect(parse(`globs: ["src/**", "docs/${nbsp}#notes/**"] # both patterns`).globs).toEqual([
+      'src/**',
+      `docs/${nbsp}#notes/**`,
+    ]);
+  });
+
+  it('keeps hashes after escaped quote delimiters and strips outside comments', () => {
+    const escapedDoubleQuote = String.raw`docs/\" #notes/**`;
+    const escapedSingleQuote = "docs/'' #notes/**";
+
+    expect(parse(`globs: "${escapedDoubleQuote}" # trailing comment`).globs).toBe(escapedDoubleQuote);
+    expect(
+      parse(`globs: ["${escapedDoubleQuote}", "src/**"] # trailing comment`).globs,
+    ).toEqual([escapedDoubleQuote, 'src/**']);
+    expect(parse(`globs: '${escapedSingleQuote}' # trailing comment`).globs).toBe(escapedSingleQuote);
+    expect(parse(`globs: ['${escapedSingleQuote}', 'src/**'] # trailing comment`).globs).toEqual([
+      escapedSingleQuote,
+      'src/**',
+    ]);
+  });
 });
 
 describe('parseRuleFrontmatter unindented block sequences', () => {
