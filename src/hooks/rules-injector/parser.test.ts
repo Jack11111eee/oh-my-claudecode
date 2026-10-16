@@ -177,6 +177,15 @@ describe('parseRuleFrontmatter trailing comments', () => {
     ]);
   });
 
+  it('opens quoted values after Unicode whitespace padding', () => {
+    const nbsp = '\u00a0';
+
+    expect(parse(`globs:${nbsp}"docs/ #notes/**" # scalar`).globs).toBe('docs/ #notes/**');
+    expect(
+      parse(`globs: ["src/**",${nbsp}"docs/ #notes/**"] # array`).globs,
+    ).toEqual(['src/**', 'docs/ #notes/**']);
+  });
+
   it('keeps hashes after escaped quote delimiters and strips outside comments', () => {
     const escapedDoubleQuote = String.raw`docs/\" #notes/**`;
     const escapedSingleQuote = "docs/'' #notes/**";

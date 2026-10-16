@@ -81,63 +81,94 @@ function parseYamlContent(yamlContent: string): RuleMetadata {
  * Trim a YAML value and drop a trailing ` # comment`. A `#` only starts a
  * comment at the start of the value or after a YAML space/tab, never inside quotes.
  */
+function findFlowArrayClosingIndex(value: string, openerIndex: number): number {
+  const suffixIsCommentOrPadding = new Uint8Array(value.length + 1);
+  suffixIsCommentOrPadding[value.length] = 1;
+  for (let i = value.length - 1; i >= 0; i--) {
+    const char = value[i];
+    suffixIsCommentOrPadding[i] =
+      char === ' ' || char === '\t' ? suffixIsCommentOrPadding[i + 1] : char === '#' ? 1 : 0;
+  }
+
+  let quoteChar = '';
+  let canStartQuote = true;
+  for (let i = openerIndex + 1; i < value.length; i++) {
+    const char = value[i];
+    if (quoteChar) {
+      if (char === '\\' && i + 1 < value.length) i++;
+      else if (char === "'" && quoteChar === "'" && value[i + 1] === "'") i++;
+      else if (char === quoteChar) {
+        quoteChar = '';
+        canStartQuote = false;
+      }
+    } else if ((char === '"' || char === "'") && canStartQuote) {
+      quoteChar = char;
+    } else if (char === '\\' && i + 1 < value.length) {
+      i++;
+      canStartQuote = false;
+    } else if (char === ']' && suffixIsCommentOrPadding[i + 1]) {
+      return i;
+    } else if (char === ',') {
+      canStartQuote = true;
+    } else if (!/\s/.test(char)) {
+      canStartQuote = false;
+    }
+  }
+  return -1;
+}
+
 function stripTrailingComment(value: string): string {
-  const flowArrayOpenerIndex = value.search(/[^ \t]/);
+  const flowArrayOpenerIndex = value.search(/\S/);
   const isFlowArray = flowArrayOpenerIndex >= 0 && value[flowArrayOpenerIndex] === '[';
   const flowArrayContentStartIndex = isFlowArray ? flowArrayOpenerIndex + 1 : 0;
-  const isHashInsideQuote = (hashIndex: number): boolean => {
-    const flowArrayContent = isFlowArray
-      ? value.slice(flowArrayContentStartIndex, hashIndex)
+  const flowArrayClosingIndex = isFlowArray
+    ? findFlowArrayClosingIndex(value, flowArrayOpenerIndex)
+    : -1;
+  const flowArrayContent =
+    isFlowArray && flowArrayClosingIndex >= flowArrayContentStartIndex
+      ? value.slice(flowArrayContentStartIndex, flowArrayClosingIndex)
       : '';
-    const balancedBraceIndices = isFlowArray
-      ? findBalancedBraceIndices(flowArrayContent, true)
-      : null;
-    let quoteChar = '';
-    let canStartQuote = true;
-    let braceDepth = 0;
-
-    for (let i = 0; i < hashIndex; i++) {
-      const char = value[i];
-      if (quoteChar) {
-        if (char === '\\' && i + 1 < hashIndex) i++;
-        else if (char === "'" && quoteChar === "'" && value[i + 1] === "'") i++;
-        else if (char === quoteChar) {
-          quoteChar = '';
-          canStartQuote = false;
-        }
-      } else if ((char === '"' || char === "'") && canStartQuote) {
-        quoteChar = char;
-      } else if (char === '\\' && i + 1 < hashIndex) {
-        i++;
-        canStartQuote = false;
-      } else {
-        const braceIndex = i - flowArrayContentStartIndex;
-        if (isFlowArray && i === flowArrayOpenerIndex) {
-          canStartQuote = true;
-        } else if (balancedBraceIndices?.openings.has(braceIndex)) {
-          braceDepth++;
-          canStartQuote = false;
-        } else if (balancedBraceIndices?.closings.has(braceIndex)) {
-          braceDepth--;
-          canStartQuote = false;
-        } else if (char === ',' && isFlowArray && braceDepth === 0) {
-          canStartQuote = true;
-        } else if (char !== ' ' && char !== '\t') {
-          canStartQuote = false;
-        }
-      }
-    }
-
-    return quoteChar !== '';
-  };
+  const balancedBraceIndices = isFlowArray
+    ? findBalancedBraceIndices(flowArrayContent, true)
+    : null;
+  let quoteChar = '';
+  let canStartQuote = true;
+  let braceDepth = 0;
 
   for (let i = 0; i < value.length; i++) {
     const char = value[i];
-    if (
+    if (quoteChar) {
+      if (char === '\\' && i + 1 < value.length) i++;
+      else if (char === "'" && quoteChar === "'" && value[i + 1] === "'") i++;
+      else if (char === quoteChar) {
+        quoteChar = '';
+        canStartQuote = false;
+      }
+    } else if ((char === '"' || char === "'") && canStartQuote) {
+      quoteChar = char;
+    } else if (char === '\\' && i + 1 < value.length) {
+      i++;
+      canStartQuote = false;
+    } else if (
       char === '#' &&
       (i === 0 || value[i - 1] === ' ' || value[i - 1] === '\t')
     ) {
-      if (!isHashInsideQuote(i)) return value.slice(0, i).trim();
+      return value.slice(0, i).trim();
+    } else {
+      const braceIndex = i - flowArrayContentStartIndex;
+      if (isFlowArray && i === flowArrayOpenerIndex) {
+        canStartQuote = true;
+      } else if (balancedBraceIndices?.openings.has(braceIndex)) {
+        braceDepth++;
+        canStartQuote = false;
+      } else if (balancedBraceIndices?.closings.has(braceIndex)) {
+        braceDepth--;
+        canStartQuote = false;
+      } else if (char === ',' && isFlowArray && braceDepth === 0) {
+        canStartQuote = true;
+      } else if (!/\s/.test(char)) {
+        canStartQuote = false;
+      }
     }
   }
   return value.trim();
