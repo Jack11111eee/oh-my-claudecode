@@ -5,16 +5,24 @@
  * Used by both the builtin-skills loader and the auto-slash-command executor.
  */
 
+import { stripLeadingUtf8Bom } from "../../scripts/lib/utf8-bom.mjs";
+export { stripLeadingUtf8Bom };
+
 /** Remove matching YAML quotes while preserving the scalar's inner whitespace. */
 export function unquoteYamlScalar(value: string): string {
   if (value.startsWith('"') && value.endsWith('"')) return value.slice(1, -1);
-  if (value.startsWith("'") && value.endsWith("'")) return value.slice(1, -1).replace(/''/g, "'");
+  if (value.startsWith("'") && value.endsWith("'"))
+    return value.slice(1, -1).replace(/''/g, "'");
   return value;
 }
 
 /** Escape a string for use inside YAML double quotes. */
 export function escapeYamlString(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r');
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r");
 }
 
 /** Escape a string for use inside YAML single quotes. */
@@ -25,8 +33,8 @@ export function escapeYamlSingleQuoted(value: string): string {
 /** Decode the YAML string escapes supported by the frontmatter parsers. */
 export function unescapeYamlString(value: string): string {
   return value.replace(/\\(\\|"|n|r)/g, (_, ch) => {
-    if (ch === 'n') return '\n';
-    if (ch === 'r') return '\r';
+    if (ch === "n") return "\n";
+    if (ch === "r") return "\r";
     return ch;
   });
 }
@@ -40,11 +48,12 @@ export function stripOptionalQuotes(value: string): string {
 }
 
 /** `|` / `>` block scalar header with optional chomping/indent indicators and comment. */
-const BLOCK_SCALAR_HEADER = /^([|>])(?:(?:([+-])([1-9])?)|(?:([1-9])([+-])?))?(?:[ \t]+#.*)?$/;
+const BLOCK_SCALAR_HEADER =
+  /^([|>])(?:(?:([+-])([1-9])?)|(?:([1-9])([+-])?))?(?:[ \t]+#.*)?$/;
 
 interface BlockScalarHeader {
   folded: boolean;
-  chomping: 'clip' | 'keep' | 'strip';
+  chomping: "clip" | "keep" | "strip";
   indentIndicator?: number;
 }
 
@@ -55,8 +64,13 @@ function parseBlockScalarHeader(rawValue: string): BlockScalarHeader | null {
   const chompingIndicator = match[2] ?? match[5];
   const indentIndicator = match[3] ?? match[4];
   return {
-    folded: match[1] === '>',
-    chomping: chompingIndicator === '+' ? 'keep' : chompingIndicator === '-' ? 'strip' : 'clip',
+    folded: match[1] === ">",
+    chomping:
+      chompingIndicator === "+"
+        ? "keep"
+        : chompingIndicator === "-"
+          ? "strip"
+          : "clip",
     ...(indentIndicator ? { indentIndicator: Number(indentIndicator) } : {}),
   };
 }
@@ -73,7 +87,7 @@ interface BlockScalarIndent {
 
 function countLeadingYamlSpaces(line: string): number {
   let count = 0;
-  while (line[count] === ' ') count++;
+  while (line[count] === " ") count++;
   return count;
 }
 
@@ -100,7 +114,7 @@ function getBlockScalarContentIndent(
       continue;
     }
     if (indent > parentIndent) {
-      if (line[indent] === '#' && indent < leadingBlankIndent) {
+      if (line[indent] === "#" && indent < leadingBlankIndent) {
         return { value: leadingBlankIndent, isDetermined: false };
       }
       return { value: indent, isDetermined: true };
@@ -112,11 +126,17 @@ function getBlockScalarContentIndent(
 }
 
 /** Read literal/folded block lines and apply YAML chomping to their final breaks. */
-function readBlockScalar(blockLines: string[], header: BlockScalarHeader, contentIndent: BlockScalarIndent): string {
+function readBlockScalar(
+  blockLines: string[],
+  header: BlockScalarHeader,
+  contentIndent: BlockScalarIndent,
+): string {
   const rows: BlockScalarRow[] = blockLines.map((line) => {
     const indent = countLeadingYamlSpaces(line);
-    if (isBlankBlockScalarLine(line) && !contentIndent.isDetermined) return { text: '', moreIndented: false };
-    const moreIndented = indent > contentIndent.value || line[contentIndent.value] === '\t';
+    if (isBlankBlockScalarLine(line) && !contentIndent.isDetermined)
+      return { text: "", moreIndented: false };
+    const moreIndented =
+      indent > contentIndent.value || line[contentIndent.value] === "\t";
     return {
       text: line.slice(Math.min(contentIndent.value, indent)),
       moreIndented,
@@ -127,33 +147,35 @@ function readBlockScalar(blockLines: string[], header: BlockScalarHeader, conten
   if (header.folded) {
     value = foldBlockScalarRows(rows);
   } else {
-    value = rows.map((row) => row.text).join('\n') + (rows.length > 0 ? '\n' : '');
+    value =
+      rows.map((row) => row.text).join("\n") + (rows.length > 0 ? "\n" : "");
   }
 
-  if (header.chomping === 'keep') return value;
-  const withoutTrailingBreaks = value.replace(/\n+$/, '');
-  if (header.chomping === 'strip' || !rows.some((row) => row.text !== '')) return withoutTrailingBreaks;
+  if (header.chomping === "keep") return value;
+  const withoutTrailingBreaks = value.replace(/\n+$/, "");
+  if (header.chomping === "strip" || !rows.some((row) => row.text !== ""))
+    return withoutTrailingBreaks;
   return `${withoutTrailingBreaks}\n`;
 }
 
 function foldBlockScalarRows(rows: BlockScalarRow[]): string {
-  let value = '';
+  let value = "";
   let previous: BlockScalarRow | undefined;
   let pendingEmptyLines = 0;
 
   for (const row of rows) {
-    if (row.text === '') {
+    if (row.text === "") {
       pendingEmptyLines++;
       continue;
     }
 
     if (!previous) {
-      value += '\n'.repeat(pendingEmptyLines);
+      value += "\n".repeat(pendingEmptyLines);
     } else if (pendingEmptyLines > 0) {
       const preservedBreak = previous.moreIndented || row.moreIndented ? 1 : 0;
-      value += '\n'.repeat(pendingEmptyLines + preservedBreak);
+      value += "\n".repeat(pendingEmptyLines + preservedBreak);
     } else {
-      value += previous.moreIndented || row.moreIndented ? '\n' : ' ';
+      value += previous.moreIndented || row.moreIndented ? "\n" : " ";
     }
 
     value += row.text;
@@ -161,7 +183,9 @@ function foldBlockScalarRows(rows: BlockScalarRow[]): string {
     pendingEmptyLines = 0;
   }
 
-  return value + '\n'.repeat(previous ? pendingEmptyLines + 1 : pendingEmptyLines);
+  return (
+    value + "\n".repeat(previous ? pendingEmptyLines + 1 : pendingEmptyLines)
+  );
 }
 
 /**
@@ -173,7 +197,8 @@ export function parseFrontmatter(content: string): {
   body: string;
 } {
   const frontmatterRegex = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)([\s\S]*)$/;
-  const match = content.match(frontmatterRegex);
+  // Editors on Windows may prepend a UTF-8 BOM, which readFileSync keeps as U+FEFF.
+  const match = stripLeadingUtf8Bom(content).match(frontmatterRegex);
 
   if (!match) {
     return { metadata: {}, body: content };
@@ -184,9 +209,14 @@ export function parseFrontmatter(content: string): {
   const lines = yamlContent.split(/\r?\n/);
   const rootLine = lines.find((line) => {
     const trimmed = line.trimStart();
-    return trimmed.length > 0 && !trimmed.startsWith('#') && trimmed.includes(':');
+    return (
+      trimmed.length > 0 && !trimmed.startsWith("#") && trimmed.includes(":")
+    );
   });
-  const rootIndent = rootLine === undefined ? undefined : rootLine.length - rootLine.trimStart().length;
+  const rootIndent =
+    rootLine === undefined
+      ? undefined
+      : rootLine.length - rootLine.trimStart().length;
 
   let flowDepth = 0;
   let quote: "'" | '"' | null = null;
@@ -197,10 +227,10 @@ export function parseFrontmatter(content: string): {
     const indent = line.length - trimmed.length;
 
     if (flowDepth === 0) {
-      if (!trimmed || trimmed.startsWith('#')) continue;
+      if (!trimmed || trimmed.startsWith("#")) continue;
       if (indent !== rootIndent) continue;
 
-      const colonIndex = line.indexOf(':');
+      const colonIndex = line.indexOf(":");
       if (colonIndex === -1) continue;
 
       const key = line.slice(0, colonIndex).trim();
@@ -209,12 +239,21 @@ export function parseFrontmatter(content: string): {
       const blockHeader = parseBlockScalarHeader(rawValue);
       if (blockHeader) {
         // `key: >-` / `key: |` — the value is the more-indented lines that follow.
-        const contentIndent = getBlockScalarContentIndent(lines, lineIndex + 1, rootIndent!, blockHeader);
+        const contentIndent = getBlockScalarContentIndent(
+          lines,
+          lineIndex + 1,
+          rootIndent!,
+          blockHeader,
+        );
         const blockLines: string[] = [];
         while (lineIndex + 1 < lines.length) {
           const nextLine = lines[lineIndex + 1];
           const nextIndent = countLeadingYamlSpaces(nextLine);
-          if (!isBlankBlockScalarLine(nextLine) && nextIndent < contentIndent.value) break;
+          if (
+            !isBlankBlockScalarLine(nextLine) &&
+            nextIndent < contentIndent.value
+          )
+            break;
           blockLines.push(lines[++lineIndex]);
         }
         metadata[key] = readBlockScalar(blockLines, blockHeader, contentIndent);
@@ -235,11 +274,12 @@ export function parseFrontmatter(content: string): {
     // or close flow structure.
     let scanFrom = 0;
     if (flowDepth === 0) {
-      const colonIndex = line.indexOf(':');
-      const valueStart = colonIndex === -1 ? -1 : line.slice(colonIndex + 1).search(/\S/);
+      const colonIndex = line.indexOf(":");
+      const valueStart =
+        colonIndex === -1 ? -1 : line.slice(colonIndex + 1).search(/\S/);
       if (colonIndex !== -1 && valueStart !== -1) {
         const firstValueChar = line[colonIndex + 1 + valueStart];
-        if (firstValueChar === '{' || firstValueChar === '[') {
+        if (firstValueChar === "{" || firstValueChar === "[") {
           scanFrom = colonIndex + 1 + valueStart;
         }
       }
@@ -250,7 +290,7 @@ export function parseFrontmatter(content: string): {
       const char = line[i];
 
       if (quote) {
-        if (quote === '"' && char === '\\') {
+        if (quote === '"' && char === "\\") {
           i++;
           continue;
         }
@@ -268,12 +308,15 @@ export function parseFrontmatter(content: string): {
         quote = char;
         continue;
       }
-      if (char === '#' && (i === 0 || line[i - 1] === ' ' || line[i - 1] === '\t')) {
+      if (
+        char === "#" &&
+        (i === 0 || line[i - 1] === " " || line[i - 1] === "\t")
+      ) {
         break;
       }
-      if (char === '{' || char === '[') {
+      if (char === "{" || char === "[") {
         flowDepth++;
-      } else if ((char === '}' || char === ']') && flowDepth > 0) {
+      } else if ((char === "}" || char === "]") && flowDepth > 0) {
         flowDepth--;
       }
     }
@@ -286,7 +329,9 @@ export function parseFrontmatter(content: string): {
  * Parse the `aliases` frontmatter field into an array of strings.
  * Supports inline YAML list: `aliases: [foo, bar]` or single value.
  */
-export function parseFrontmatterAliases(rawAliases: string | undefined): string[] {
+export function parseFrontmatterAliases(
+  rawAliases: string | undefined,
+): string[] {
   return parseFrontmatterList(rawAliases);
 }
 
@@ -297,26 +342,26 @@ export function parseFrontmatterAliases(rawAliases: string | undefined): string[
  */
 export function splitFlowSequenceItems(inner: string): string[] {
   const items: string[] = [];
-  let current = '';
+  let current = "";
   let quote: '"' | "'" | null = null;
 
   for (let i = 0; i < inner.length; i++) {
     const char = inner[i];
     if (quote) {
       current += char;
-      if (quote === '"' && char === '\\' && i + 1 < inner.length) {
+      if (quote === '"' && char === "\\" && i + 1 < inner.length) {
         current += inner[++i];
       } else if (quote === "'" && char === "'" && inner[i + 1] === "'") {
         current += inner[++i];
       } else if (char === quote) {
         quote = null;
       }
-    } else if ((char === '"' || char === "'") && current.trim() === '') {
+    } else if ((char === '"' || char === "'") && current.trim() === "") {
       quote = char;
       current += char;
-    } else if (char === ',') {
+    } else if (char === ",") {
       items.push(current);
-      current = '';
+      current = "";
     } else {
       current += char;
     }
@@ -335,7 +380,7 @@ export function parseFrontmatterList(rawValue: string | undefined): string[] {
   const trimmed = rawValue.trim();
   if (!trimmed) return [];
 
-  if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+  if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
     const inner = trimmed.slice(1, -1).trim();
     if (!inner) return [];
 

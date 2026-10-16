@@ -109,6 +109,15 @@ describe('parseRuleFrontmatter brace globs', () => {
   });
 });
 
+describe('parseRuleFrontmatter UTF-8 BOM', () => {
+  it('parses a rule file that starts with a BOM', () => {
+    const { metadata, body } = parseRuleFrontmatter('\uFEFF---\nglobs: "src/**/*.ts"\nalwaysApply: false\n---\nrule\uFEFF body');
+
+    expect(metadata.globs).toBe('src/**/*.ts');
+    expect(body).toBe('rule\uFEFF body');
+  });
+});
+
 describe('parseRuleFrontmatter trailing comments', () => {
   const parse = (yaml: string) => parseRuleFrontmatter(`---\n${yaml}\n---\nbody`).metadata;
 

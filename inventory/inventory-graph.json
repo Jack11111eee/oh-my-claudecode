@@ -5,15 +5,15 @@
   "provenance": {
     "base": "05c800f40d1ad53b42a78609d2667ef4f726808b",
     "planningHead": "0a91273e61dbbd47eb0af4c02844409251e08398",
-    "head": "55597eab08d414e60ca06265bfe225f7002a0719",
-    "sourceSha256": "81b0d9464d1a9f9bfc4114ae28a2480723926f6bea49ee045188c0c1c261b2bc",
+    "head": "9cfaf245816e334917168c2e835d2926d278edcb",
+    "sourceSha256": "e284e24523569167ae7e28589fb3ca810d2fc4ee5ba7eadcfeefa892989b15c7",
     "generatedAt": null,
     "generator": "scripts/generate-inventory-graph.mjs"
   },
   "base": "05c800f40d1ad53b42a78609d2667ef4f726808b",
   "planningHead": "0a91273e61dbbd47eb0af4c02844409251e08398",
-  "head": "55597eab08d414e60ca06265bfe225f7002a0719",
-  "sourceSha256": "81b0d9464d1a9f9bfc4114ae28a2480723926f6bea49ee045188c0c1c261b2bc",
+  "head": "9cfaf245816e334917168c2e835d2926d278edcb",
+  "sourceSha256": "e284e24523569167ae7e28589fb3ca810d2fc4ee5ba7eadcfeefa892989b15c7",
   "counts": {
     "public": {
       "skills": 48,
@@ -27,9 +27,9 @@
       "featureFiles": 88,
       "toolFiles": 65,
       "libFiles": 48,
-      "templateHooks": 23,
+      "templateHooks": 24,
       "srcFiles": 1472,
-      "total": 1495
+      "total": 1496
     },
     "generated": {
       "distFiles": 5613,
@@ -716,6 +716,7 @@
       "templates/hooks/lib/state-lock.mjs",
       "templates/hooks/lib/state-root.mjs",
       "templates/hooks/lib/stdin.mjs",
+      "templates/hooks/lib/utf8-bom.mjs",
       "templates/hooks/lib/workflow-profile-runtime.mjs",
       "templates/hooks/lib/workflow-stage-prompts.mjs",
       "templates/hooks/persistent-mode.mjs",
@@ -856,6 +857,8 @@
       "scripts/lib/state-root.cjs",
       "scripts/lib/state-root.mjs",
       "scripts/lib/stdin.mjs",
+      "scripts/lib/utf8-bom.d.mts",
+      "scripts/lib/utf8-bom.mjs",
       "scripts/lib/workflow-profile-runtime.mjs",
       "scripts/lib/workflow-stage-prompts.mjs",
       "scripts/measure-prompt-ssot.ts",
@@ -37239,6 +37242,16 @@
         "path": "scripts/lib/stdin.mjs"
       },
       {
+        "id": "scripts/lib/utf8-bom.d.mts",
+        "kind": "script",
+        "path": "scripts/lib/utf8-bom.d.mts"
+      },
+      {
+        "id": "scripts/lib/utf8-bom.mjs",
+        "kind": "script",
+        "path": "scripts/lib/utf8-bom.mjs"
+      },
+      {
         "id": "scripts/lib/workflow-profile-runtime.mjs",
         "kind": "script",
         "path": "scripts/lib/workflow-profile-runtime.mjs"
@@ -45469,6 +45482,11 @@
         "path": "templates/hooks/lib/stdin.mjs"
       },
       {
+        "id": "templates/hooks/lib/utf8-bom.mjs",
+        "kind": "template-hook",
+        "path": "templates/hooks/lib/utf8-bom.mjs"
+      },
+      {
         "id": "templates/hooks/lib/workflow-profile-runtime.mjs",
         "kind": "template-hook",
         "path": "templates/hooks/lib/workflow-profile-runtime.mjs"
@@ -47781,6 +47799,11 @@
         "kind": "imports"
       },
       {
+        "from": "scripts/pre-tool-enforcer.mjs",
+        "to": "scripts/lib/utf8-bom.mjs",
+        "kind": "imports"
+      },
+      {
         "from": "scripts/project-memory-posttool.mjs",
         "to": "dist/hooks/project-memory/learner.js",
         "kind": "imports"
@@ -48156,6 +48179,11 @@
         "kind": "imports"
       },
       {
+        "from": "scripts/shipyard-audit.mjs",
+        "to": "scripts/lib/utf8-bom.mjs",
+        "kind": "imports"
+      },
+      {
         "from": "scripts/skill-injector.mjs",
         "to": "dist/hooks/skill-bridge.cjs",
         "kind": "imports"
@@ -48198,6 +48226,11 @@
       {
         "from": "scripts/skill-injector.mjs",
         "to": "scripts/lib/stdin.mjs",
+        "kind": "imports"
+      },
+      {
+        "from": "scripts/skill-injector.mjs",
+        "to": "scripts/lib/utf8-bom.mjs",
         "kind": "imports"
       },
       {
@@ -65616,6 +65649,11 @@
         "kind": "imports"
       },
       {
+        "from": "src/hooks/learner/bridge.ts",
+        "to": "src/utils/frontmatter.ts",
+        "kind": "imports"
+      },
+      {
         "from": "src/hooks/learner/config.ts",
         "to": "external:fs",
         "kind": "imports"
@@ -68839,6 +68877,11 @@
         "from": "src/hooks/rules-injector/parser.ts",
         "to": "src/hooks/rules-injector/types.ts",
         "kind": "type-imports"
+      },
+      {
+        "from": "src/hooks/rules-injector/parser.ts",
+        "to": "src/utils/frontmatter.ts",
+        "kind": "imports"
       },
       {
         "from": "src/hooks/rules-injector/storage.ts",
@@ -86691,6 +86734,11 @@
         "kind": "imports"
       },
       {
+        "from": "src/utils/frontmatter.ts",
+        "to": "scripts/lib/utf8-bom.mjs",
+        "kind": "imports"
+      },
+      {
         "from": "src/utils/omc-cli-rendering.ts",
         "to": "external:child_process",
         "kind": "imports"
@@ -87231,6 +87279,16 @@
         "kind": "projects"
       },
       {
+        "from": "templates/hooks/lib/utf8-bom.mjs",
+        "to": "hooks/hooks.json",
+        "kind": "projects"
+      },
+      {
+        "from": "templates/hooks/lib/utf8-bom.mjs",
+        "to": "src/hooks/bridge.ts",
+        "kind": "projects"
+      },
+      {
         "from": "templates/hooks/lib/workflow-profile-runtime.mjs",
         "to": "external:child_process",
         "kind": "imports"
@@ -87423,6 +87481,11 @@
       {
         "from": "templates/hooks/pre-tool-use.mjs",
         "to": "templates/hooks/lib/skill-entitlements.mjs",
+        "kind": "imports"
+      },
+      {
+        "from": "templates/hooks/pre-tool-use.mjs",
+        "to": "templates/hooks/lib/utf8-bom.mjs",
         "kind": "imports"
       },
       {
@@ -88632,12 +88695,12 @@
       }
     ],
     "stats": {
-      "nodeCount": 7744,
-      "edgeCount": 8558,
-      "importEdgeCount": 7110,
+      "nodeCount": 7747,
+      "edgeCount": 8567,
+      "importEdgeCount": 7117,
       "registerEdgeCount": 69
     }
   },
-  "inventorySha256": "bd69b065700ba6138f471f1a5721dc4f9d42aa5c8589be691e0074aaa3a953bf",
-  "manifestSha256": "274960d53194973324bf0cad903a5f2a5738afed6bbf3335e159f330ce54c7e9"
+  "inventorySha256": "8263938ef3904d69821e499dc339bbf56d8b9658c6b93902c89177120d703ffa",
+  "manifestSha256": "f890b577d09ea33e245b07ac19f84c23ee4c41c4b126dcfa1ed811046416f930"
 }
