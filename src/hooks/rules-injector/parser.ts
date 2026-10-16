@@ -79,10 +79,6 @@ function parseYamlContent(yamlContent: string): RuleMetadata {
   return metadata;
 }
 
-/**
- * Trim a YAML value and drop a trailing ` # comment`. A `#` only starts a
- * comment at the start of the value or after a YAML space/tab, never inside quotes.
- */
 /** Marks apostrophes that can close a quoted item before padding or a comment. */
 function findTerminalSingleQuoteSuffix(value: string): Uint8Array {
   const suffix = new Uint8Array(value.length + 1);
@@ -120,11 +116,36 @@ function isSingleQuoteEscapeAtItemEnd(
     (terminalQuoteSuffix !== undefined &&
       nextIndex > backslashIndex + 3 &&
       value[nextIndex] === '#' &&
-      !terminalQuoteSuffix[nextIndex + 1])
+      !hasTerminalSingleQuoteAfterComment(value, nextIndex, terminalQuoteSuffix))
   );
 }
 
-/** Treat a complete quoted item after a comma as a flow boundary despite unmatched braces. */
+function hasTerminalSingleQuoteAfterComment(
+  value: string,
+  commentIndex: number,
+  terminalQuoteSuffix: Uint8Array
+): boolean {
+  let commentQuote = '';
+
+  for (let i = commentIndex + 1; i < value.length; i++) {
+    const char = value[i];
+    if (commentQuote) {
+      if (char === commentQuote) commentQuote = '';
+      continue;
+    }
+    if (
+      (char === "'" || char === '"') &&
+      (i === commentIndex + 1 || value[i - 1] === ' ' || value[i - 1] === '\t')
+    ) {
+      commentQuote = char;
+    } else if (char === "'" && terminalQuoteSuffix[i]) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function isQuotedFlowItemAfterComma(value: string, commaIndex: number): boolean {
   let quoteIndex = commaIndex + 1;
   while (quoteIndex < value.length && /\s/.test(value[quoteIndex])) quoteIndex++;
@@ -156,7 +177,11 @@ function findFlowArrayClosingIndex(value: string, openerIndex: number): number {
   for (let i = value.length - 1; i >= 0; i--) {
     const char = value[i];
     suffixIsCommentOrPadding[i] =
-      char === ' ' || char === '\t' ? suffixIsCommentOrPadding[i + 1] : char === '#' ? 1 : 0;
+      char === ' ' || char === '\t'
+        ? suffixIsCommentOrPadding[i + 1]
+        : char === '#' && (i === 0 || value[i - 1] === ' ' || value[i - 1] === '\t')
+          ? 1
+          : 0;
   }
 
   let quoteChar = '';
@@ -200,6 +225,10 @@ function findFlowArrayClosingIndex(value: string, openerIndex: number): number {
   return -1;
 }
 
+/**
+ * Trim a YAML value and drop a trailing ` # comment`. A `#` only starts a
+ * comment at the start of the value or after a YAML space/tab, never inside quotes.
+ */
 function stripTrailingComment(value: string): string {
   const flowArrayOpenerIndex = value.search(/\S/);
   const isFlowArray = flowArrayOpenerIndex >= 0 && value[flowArrayOpenerIndex] === '[';

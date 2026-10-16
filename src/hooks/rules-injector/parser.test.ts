@@ -140,6 +140,13 @@ describe('parseRuleFrontmatter trailing comments', () => {
     expect(parse('globs: ["a/**", "b/**"] # both').globs).toEqual(['a/**', 'b/**']);
   });
 
+  it('keeps adjacent hashes in inline-array globs when finding the closing bracket', () => {
+    expect(parse('globs: [src/[ab]#tag{foo,"bar}, "docs/ #notes/**"]').globs).toEqual([
+      'src/[ab]#tag{foo,"bar}',
+      'docs/ #notes/**',
+    ]);
+  });
+
   it('keeps # inside quotes and glued to non-space text', () => {
     expect(parse('globs: "docs/ #notes/**"').globs).toBe('docs/ #notes/**');
     expect(parse('globs: docs/#notes/**').globs).toBe('docs/#notes/**');
@@ -245,6 +252,7 @@ describe('parseRuleFrontmatter trailing comments', () => {
     expect(parse(String.raw`globs: 'docs/foo\'' # don't include`).globs).toBe(
       String.raw`docs/foo\'`,
     );
+    expect(parse(String.raw`globs: 'docs/foo\'' # 'legacy'`).globs).toBe(String.raw`docs/foo\'`);
   });
 });
 
