@@ -151,10 +151,17 @@ describe('parseRuleFrontmatter trailing comments', () => {
     ]);
   });
 
+  it('does not treat quote characters in glob character classes as YAML quotes', () => {
+    expect(parse("globs: docs/[']*.md # docs only").globs).toBe("docs/[']*.md");
+
+    const inlineArray = String.raw`globs: [docs/[']*.md, "src/**"] # both`;
+    expect(parse(inlineArray).globs).toEqual(["docs/[']*.md", 'src/**']);
+  });
+
   it('does not start comments after Unicode whitespace inside an unquoted glob', () => {
     const nbsp = '\u00a0';
 
-    expect(parse(`globs: ["src/**", "docs/${nbsp}#notes/**"] # both patterns`).globs).toEqual([
+    expect(parse(`globs: ["src/**", docs/${nbsp}#notes/**] # both patterns`).globs).toEqual([
       'src/**',
       `docs/${nbsp}#notes/**`,
     ]);

@@ -82,8 +82,11 @@ function parseYamlContent(yamlContent: string): RuleMetadata {
  * comment at the start of the value or after a YAML space/tab, never inside quotes.
  */
 function stripTrailingComment(value: string): string {
+  const isFlowArray = value.trimStart().startsWith('[');
   let quoteChar = '';
   let canStartQuote = true;
+  let flowDepth = 0;
+  let braceDepth = 0;
   for (let i = 0; i < value.length; i++) {
     const char = value[i];
     if (quoteChar) {
@@ -100,10 +103,24 @@ function stripTrailingComment(value: string): string {
       (i === 0 || value[i - 1] === ' ' || value[i - 1] === '\t')
     ) {
       return value.slice(0, i).trim();
-    } else if (char === '[' || char === ',') {
-      canStartQuote = true;
-    } else if (char !== ' ' && char !== '\t') {
-      canStartQuote = false;
+    } else {
+      if (isFlowArray && char === '[') {
+        flowDepth++;
+        canStartQuote = flowDepth === 1;
+      } else if (isFlowArray && char === ']' && flowDepth > 0) {
+        flowDepth--;
+        canStartQuote = false;
+      } else if (isFlowArray && char === '{') {
+        braceDepth++;
+        canStartQuote = false;
+      } else if (isFlowArray && char === '}' && braceDepth > 0) {
+        braceDepth--;
+        canStartQuote = false;
+      } else if (char === ',' && isFlowArray && flowDepth === 1 && braceDepth === 0) {
+        canStartQuote = true;
+      } else if (char !== ' ' && char !== '\t') {
+        canStartQuote = false;
+      }
     }
   }
   return value.trim();
