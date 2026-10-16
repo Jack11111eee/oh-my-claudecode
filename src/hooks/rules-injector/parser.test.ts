@@ -168,6 +168,11 @@ describe('parseRuleFrontmatter trailing comments', () => {
     ]);
   });
 
+  it('keeps brace-alternative quotes out of flow item boundaries', () => {
+    const inlineArray = String.raw`globs: [src/{foo,'bar}, "docs/ #notes/**"] # see ]`;
+    expect(parse(inlineArray).globs).toEqual(["src/{foo,'bar}", 'docs/ #notes/**']);
+  });
+
   it('does not start comments after Unicode whitespace inside an unquoted glob', () => {
     const nbsp = '\u00a0';
 

@@ -92,6 +92,7 @@ function findFlowArrayClosingIndex(value: string, openerIndex: number): number {
 
   let quoteChar = '';
   let canStartQuote = true;
+  let braceDepth = 0;
   for (let i = openerIndex + 1; i < value.length; i++) {
     const char = value[i];
     if (quoteChar) {
@@ -106,9 +107,15 @@ function findFlowArrayClosingIndex(value: string, openerIndex: number): number {
     } else if (char === '\\' && i + 1 < value.length) {
       i++;
       canStartQuote = false;
+    } else if (char === '{') {
+      braceDepth++;
+      canStartQuote = false;
+    } else if (char === '}' && braceDepth > 0) {
+      braceDepth--;
+      canStartQuote = false;
     } else if (char === ']' && suffixIsCommentOrPadding[i + 1]) {
       return i;
-    } else if (char === ',') {
+    } else if (char === ',' && braceDepth === 0) {
       canStartQuote = true;
     } else if (!/\s/.test(char)) {
       canStartQuote = false;
