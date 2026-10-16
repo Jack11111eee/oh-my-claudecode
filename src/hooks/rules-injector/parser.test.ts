@@ -153,3 +153,39 @@ describe('parseRuleFrontmatter unindented block sequences', () => {
     expect(parseRuleFrontmatter('---\r\npaths:\r\n- src/**\r\n---\r\nbody').metadata.globs).toEqual(['src/**']);
   });
 });
+
+describe('parseRuleFrontmatter trailing comments', () => {
+  const parse = (yaml: string) => parseRuleFrontmatter(`---\n${yaml}\n---\nbody`).metadata;
+
+  it('ignores a comment after alwaysApply', () => {
+    expect(parse('alwaysApply: true # applies everywhere').alwaysApply).toBe(true);
+  });
+
+  it('ignores a comment after a scalar glob', () => {
+    expect(parse('globs: "src/**/*.ts" # typescript only').globs).toBe('src/**/*.ts');
+    expect(parse('paths: src/**/*.ts   # typescript only').globs).toBe('src/**/*.ts');
+  });
+
+  it('ignores comments after list items and after the key', () => {
+    expect(parse('paths: # rule targets\n  - "src/**" # code\n  - lib/**')).toEqual({
+      globs: ['src/**', 'lib/**'],
+    });
+  });
+
+  it('ignores a comment after an inline array', () => {
+    expect(parse('globs: ["a/**", "b/**"] # both').globs).toEqual(['a/**', 'b/**']);
+  });
+
+  it('keeps # inside quotes and glued to non-space text', () => {
+    expect(parse('globs: "docs/ #notes/**"').globs).toBe('docs/ #notes/**');
+    expect(parse('globs: docs/#notes/**').globs).toBe('docs/#notes/**');
+    expect(parse('globs: docs/#notes/** # rule target').globs).toBe('docs/#notes/**');
+    expect(parse('globs: ["docs/ #notes/**", "src/**"] # both').globs).toEqual([
+      'docs/ #notes/**',
+      'src/**',
+    ]);
+    expect(parse('globs:\n  - "docs/ #notes/**" # docs').globs).toEqual([
+      'docs/ #notes/**',
+    ]);
+  });
+});

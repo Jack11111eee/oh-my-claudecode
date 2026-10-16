@@ -60,7 +60,7 @@ function parseYamlContent(yamlContent: string): RuleMetadata {
     }
 
     const key = line.slice(0, colonIndex).trim();
-    const rawValue = line.slice(colonIndex + 1).trim();
+    const rawValue = stripTrailingComment(line.slice(colonIndex + 1));
 
     if (key === 'description') {
       metadata.description = parseStringValue(rawValue);
@@ -78,6 +78,39 @@ function parseYamlContent(yamlContent: string): RuleMetadata {
   }
 
   return metadata;
+}
+
+/**
+ * Trim a YAML value and drop a trailing ` # comment`. A `#` only starts a
+ * comment at the start of the value or after whitespace, and never inside quotes.
+ */
+function stripTrailingComment(value: string): string {
+  let quoteChar = '';
+  let canStartQuote = true;
+  const flowArrayOpenerIndex = value.search(/\S/);
+  const isFlowArray = value[flowArrayOpenerIndex] === '[';
+  for (let i = 0; i < value.length; i++) {
+    const char = value[i];
+    if (quoteChar) {
+      if (char === '\\' && quoteChar === '"') i++;
+      else if (quoteChar === "'" && char === "'" && value[i + 1] === "'") i++;
+      else if (char === quoteChar) {
+        quoteChar = '';
+        canStartQuote = false;
+      }
+    } else if ((char === '"' || char === "'") && canStartQuote) {
+      quoteChar = char;
+    } else if (char === '#' && (i === 0 || /\s/.test(value[i - 1]))) {
+      return value.slice(0, i).trim();
+    } else if (isFlowArray && i === flowArrayOpenerIndex && char === '[') {
+      canStartQuote = true;
+    } else if (char === ',') {
+      canStartQuote = true;
+    } else if (!/\s/.test(char)) {
+      canStartQuote = false;
+    }
+  }
+  return value.trim();
 }
 
 /**
@@ -122,7 +155,7 @@ function parseArrayOrStringValue(
       // Check if this is an array item (starts with whitespace + dash)
       const arrayMatch = nextLine.match(/^\s*-\s*(.*)$/);
       if (arrayMatch) {
-        const itemValue = parseStringValue(arrayMatch[1].trim());
+        const itemValue = parseStringValue(stripTrailingComment(arrayMatch[1]));
         if (itemValue) {
           arrayItems.push(itemValue);
         }
