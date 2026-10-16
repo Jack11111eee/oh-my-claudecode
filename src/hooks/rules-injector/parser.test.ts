@@ -136,6 +136,10 @@ describe('parseRuleFrontmatter trailing comments', () => {
     expect(parse('globs: docs/#notes/**').globs).toBe('docs/#notes/**');
   });
 
+  it('treats a whitespace-separated hash in an unquoted glob as a comment', () => {
+    expect(parse('globs: docs/ #notes/**').globs).toBe('docs/');
+  });
+
   it('keeps hashes inside quoted inline-array globs and strips the outside comment', () => {
     expect(parse('globs: ["docs/ #notes/**", "src/**"] # both patterns').globs).toEqual([
       'docs/ #notes/**',

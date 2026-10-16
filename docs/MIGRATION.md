@@ -7,6 +7,7 @@ This guide covers all migration paths for oh-my-claudecode. Find your current ve
 ## Table of Contents
 
 - [Unreleased: Rule Glob Brace Alternation](#unreleased-rule-glob-brace-alternation)
+- [Unreleased: Rule Frontmatter YAML Comments](#unreleased-rule-frontmatter-yaml-comments)
 - [Unreleased: Glossary File Rename (CONTEXT.md → GLOSSARY.md)](#unreleased-glossary-file-rename-contextmd--glossarymd)
 - [Unreleased: Shipyard Tracker Artifacts and Audit Contract v2](#unreleased-shipyard-tracker-artifacts-and-audit-contract-v2)
 - [Unreleased: SSRF Guard for IPv6 Literals](#unreleased-ssrf-guard-for-ipv6-literals)
@@ -37,6 +38,20 @@ globs:
 
 Use a quoted inline or block array item as shown; an unquoted comma-separated
 scalar still treats commas outside brace groups as pattern separators.
+
+## Unreleased: Rule Frontmatter YAML Comments
+
+Rule frontmatter now treats an unquoted `#` at the start of a value or after a
+space/tab as a YAML comment. Thus `globs: docs/ #notes/**` is parsed as glob
+`docs/` plus a comment. Quote a literal hash after whitespace to keep it in the
+pattern:
+
+```yaml
+globs: "docs/ #notes/**"
+```
+
+Hashes adjacent to non-space characters remain part of unquoted patterns, such
+as `docs/#notes/**`.
 
 ## Unreleased: Glossary File Rename (CONTEXT.md → GLOSSARY.md)
 
