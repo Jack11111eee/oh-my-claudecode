@@ -183,13 +183,17 @@ function createParserScanIndex(
           ? i
           : nextDoubleQuote[i + 1];
     nextSingleQuote[i] =
-      char === '\\' && i + 1 < length
-        ? nextSingleQuote[i + 2]
-        : char === "'" && value[i + 1] === "'"
+      char === '\\' && i + 2 < length && value[i + 1] === "'" && value[i + 2] === "'"
+        ? isSingleQuoteEscapeAtItemEnd(value, i)
           ? nextSingleQuote[i + 2]
-          : char === "'"
-            ? i
-            : nextSingleQuote[i + 1];
+          : nextSingleQuote[i + 1]
+        : char === '\\' && i + 1 < length
+          ? nextSingleQuote[i + 2]
+          : char === "'" && value[i + 1] === "'"
+            ? nextSingleQuote[i + 2]
+            : char === "'"
+              ? i
+              : nextSingleQuote[i + 1];
 
     if (char === '"') matchingQuoteEnd[i] = nextDoubleQuote[i + 1];
     else if (char === "'") matchingQuoteEnd[i] = nextSingleQuote[i + 1];

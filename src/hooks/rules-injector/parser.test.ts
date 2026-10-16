@@ -199,6 +199,16 @@ describe('parseRuleFrontmatter trailing comments', () => {
     ]);
   });
 
+  it('keeps doubled apostrophes inside quoted flow items after backslashes', () => {
+    const inlineArray = String.raw`globs: [a{b, 'docs/ } \'' #notes/**', src/**] # both`;
+
+    expect(parse(inlineArray).globs).toEqual([
+      'a{b',
+      String.raw`docs/ } \'' #notes/**`,
+      'src/**',
+    ]);
+  });
+
   it('keeps balanced brace groups across quoted alternatives', () => {
     expect(parse(`globs: [src/{foo,'bar',baz}, docs/**]`).globs).toEqual([
       "src/{foo,'bar',baz}",
