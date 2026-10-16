@@ -79,31 +79,10 @@ function parseYamlContent(yamlContent: string): RuleMetadata {
   return metadata;
 }
 
-/** Marks apostrophes that can close a quoted item before padding or a comment. */
-function findTerminalSingleQuoteSuffix(value: string): Uint8Array {
-  const suffix = new Uint8Array(value.length + 1);
-  let nextNonHorizontalWhitespace = value.length;
-
-  for (let i = value.length - 1; i >= 0; i--) {
-    suffix[i] = suffix[i + 1];
-    if (value[i] === "'") {
-      const isTerminal =
-        nextNonHorizontalWhitespace === value.length ||
-        value[nextNonHorizontalWhitespace] === ',' ||
-        value[nextNonHorizontalWhitespace] === ']' ||
-        (nextNonHorizontalWhitespace > i + 1 && value[nextNonHorizontalWhitespace] === '#');
-      if (isTerminal) suffix[i] = 1;
-    }
-    if (value[i] !== ' ' && value[i] !== '\t') nextNonHorizontalWhitespace = i;
-  }
-
-  return suffix;
-}
-
 function isSingleQuoteEscapeAtItemEnd(
   value: string,
   backslashIndex: number,
-  terminalQuoteSuffix?: Uint8Array
+  allowTrailingComment = false
 ): boolean {
   let nextIndex = backslashIndex + 3;
   while (nextIndex < value.length && (value[nextIndex] === ' ' || value[nextIndex] === '\t')) {
@@ -113,37 +92,10 @@ function isSingleQuoteEscapeAtItemEnd(
     nextIndex === value.length ||
     value[nextIndex] === ',' ||
     value[nextIndex] === ']' ||
-    (terminalQuoteSuffix !== undefined &&
+    (allowTrailingComment &&
       nextIndex > backslashIndex + 3 &&
-      value[nextIndex] === '#' &&
-      !hasTerminalSingleQuoteAfterComment(value, nextIndex, terminalQuoteSuffix))
+      value[nextIndex] === '#')
   );
-}
-
-function hasTerminalSingleQuoteAfterComment(
-  value: string,
-  commentIndex: number,
-  terminalQuoteSuffix: Uint8Array
-): boolean {
-  let commentQuote = '';
-
-  for (let i = commentIndex + 1; i < value.length; i++) {
-    const char = value[i];
-    if (commentQuote) {
-      if (char === commentQuote) commentQuote = '';
-      continue;
-    }
-    if (
-      (char === "'" || char === '"') &&
-      (i === commentIndex + 1 || value[i - 1] === ' ' || value[i - 1] === '\t')
-    ) {
-      commentQuote = char;
-    } else if (char === "'" && terminalQuoteSuffix[i]) {
-      return true;
-    }
-  }
-
-  return false;
 }
 
 interface ParserScanIndex {
@@ -454,8 +406,6 @@ function stripTrailingComment(value: string): string {
   const balancedBraceIndices = isFlowArray
     ? findBalancedBraceIndices(flowArrayContent, true)
     : null;
-  const terminalQuoteSuffix =
-    !isFlowArray && value.includes("\\''") ? findTerminalSingleQuoteSuffix(value) : undefined;
   let quoteChar = '';
   let canStartQuote = true;
   let braceDepth = 0;
@@ -464,7 +414,7 @@ function stripTrailingComment(value: string): string {
     const char = value[i];
     if (quoteChar) {
       if (quoteChar === "'" && char === '\\' && value[i + 1] === "'" && value[i + 2] === "'") {
-        if (isSingleQuoteEscapeAtItemEnd(value, i, terminalQuoteSuffix)) i++;
+        if (isSingleQuoteEscapeAtItemEnd(value, i, !isFlowArray)) i++;
         canStartQuote = false;
       } else if (char === '\\' && i + 1 < value.length) i++;
       else if (char === "'" && quoteChar === "'" && value[i + 1] === "'") i++;
