@@ -161,8 +161,8 @@ describe('parseRuleFrontmatter trailing comments', () => {
     expect(parse(escapedBracketArray).globs).toEqual([String.raw`src/\[`, 'docs/ #notes/**']);
   });
 
-  it('recognizes quoted items after unmatched brace globs', () => {
-    expect(parse('globs: [a{b.ts, "docs/ #notes/**"] # both').globs).toEqual([
+  it('recognizes quoted items after unmatched braces without scanning comment text', () => {
+    expect(parse('globs: [a{b.ts, "docs/ #notes/**"] # see }]').globs).toEqual([
       'a{b.ts',
       'docs/ #notes/**',
     ]);

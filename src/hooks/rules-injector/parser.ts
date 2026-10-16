@@ -85,50 +85,59 @@ function stripTrailingComment(value: string): string {
   const flowArrayOpenerIndex = value.search(/[^ \t]/);
   const isFlowArray = flowArrayOpenerIndex >= 0 && value[flowArrayOpenerIndex] === '[';
   const flowArrayContentStartIndex = isFlowArray ? flowArrayOpenerIndex + 1 : 0;
-  const flowArrayContentEndIndex = isFlowArray ? value.lastIndexOf(']') : -1;
-  const flowArrayContent =
-    isFlowArray && flowArrayContentEndIndex >= flowArrayContentStartIndex
-      ? value.slice(flowArrayContentStartIndex, flowArrayContentEndIndex)
+  const isHashInsideQuote = (hashIndex: number): boolean => {
+    const flowArrayContent = isFlowArray
+      ? value.slice(flowArrayContentStartIndex, hashIndex)
       : '';
-  const { openings: balancedBraceOpeners, closings: balancedBraceClosers } =
-    findBalancedBraceIndices(flowArrayContent, true);
-  let quoteChar = '';
-  let canStartQuote = true;
-  let braceDepth = 0;
+    const balancedBraceIndices = isFlowArray
+      ? findBalancedBraceIndices(flowArrayContent, true)
+      : null;
+    let quoteChar = '';
+    let canStartQuote = true;
+    let braceDepth = 0;
+
+    for (let i = 0; i < hashIndex; i++) {
+      const char = value[i];
+      if (quoteChar) {
+        if (char === '\\' && quoteChar === '"') i++;
+        else if (char === "'" && quoteChar === "'" && value[i + 1] === "'") i++;
+        else if (char === quoteChar) {
+          quoteChar = '';
+          canStartQuote = false;
+        }
+      } else if ((char === '"' || char === "'") && canStartQuote) {
+        quoteChar = char;
+      } else if (char === '\\' && i + 1 < hashIndex) {
+        i++;
+        canStartQuote = false;
+      } else {
+        const braceIndex = i - flowArrayContentStartIndex;
+        if (isFlowArray && i === flowArrayOpenerIndex) {
+          canStartQuote = true;
+        } else if (balancedBraceIndices?.openings.has(braceIndex)) {
+          braceDepth++;
+          canStartQuote = false;
+        } else if (balancedBraceIndices?.closings.has(braceIndex)) {
+          braceDepth--;
+          canStartQuote = false;
+        } else if (char === ',' && isFlowArray && braceDepth === 0) {
+          canStartQuote = true;
+        } else if (char !== ' ' && char !== '\t') {
+          canStartQuote = false;
+        }
+      }
+    }
+
+    return quoteChar !== '';
+  };
+
   for (let i = 0; i < value.length; i++) {
     const char = value[i];
-    if (quoteChar) {
-      if (char === '\\' && quoteChar === '"') i++;
-      else if (char === "'" && quoteChar === "'" && value[i + 1] === "'") i++;
-      else if (char === quoteChar) {
-        quoteChar = '';
-        canStartQuote = false;
-      }
-    } else if ((char === '"' || char === "'") && canStartQuote) {
-      quoteChar = char;
-    } else if (char === '\\' && i + 1 < value.length) {
-      i++;
-      canStartQuote = false;
-    } else if (
+    if (
       char === '#' &&
       (i === 0 || value[i - 1] === ' ' || value[i - 1] === '\t')
     ) {
-      return value.slice(0, i).trim();
-    } else {
-      const braceIndex = i - flowArrayContentStartIndex;
-      if (isFlowArray && i === flowArrayOpenerIndex) {
-        canStartQuote = true;
-      } else if (isFlowArray && balancedBraceOpeners.has(braceIndex)) {
-        braceDepth++;
-        canStartQuote = false;
-      } else if (isFlowArray && balancedBraceClosers.has(braceIndex)) {
-        braceDepth--;
-        canStartQuote = false;
-      } else if (char === ',' && isFlowArray && braceDepth === 0) {
-        canStartQuote = true;
-      } else if (char !== ' ' && char !== '\t') {
-        canStartQuote = false;
-      }
+      if (!isHashInsideQuote(i)) return value.slice(0, i).trim();
     }
   }
   return value.trim();
