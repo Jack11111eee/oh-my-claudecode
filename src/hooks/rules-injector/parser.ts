@@ -215,7 +215,18 @@ function createParserScanIndex(
       nextIndex = i + 2;
     } else if (char === '"' || char === "'") {
       const quoteEndIndex = matchingQuoteEnd[i];
-      if (quoteEndIndex >= 0) nextIndex = quoteEndIndex + 1;
+      // A context-free pair can cross a brace closer into a later array item.
+      if (
+        quoteEndIndex >= 0 &&
+        hasFlowItemBoundaryAfterQuote(
+          value,
+          quoteEndIndex,
+          nextNonWhitespace,
+          suffixIsCommentOrPadding
+        )
+      ) {
+        nextIndex = quoteEndIndex + 1;
+      }
     } else if (char === '{') {
       braceDelta = 1;
     } else if (char === '}') {
@@ -264,6 +275,18 @@ function createParserScanIndex(
   };
 }
 
+function hasFlowItemBoundaryAfterQuote(
+  value: string,
+  quoteEndIndex: number,
+  nextNonWhitespace: Int32Array,
+  suffixIsCommentOrPadding?: Uint8Array
+): boolean {
+  const boundaryIndex = nextNonWhitespace[quoteEndIndex + 1];
+  const isArrayClosingBracket =
+    value[boundaryIndex] === ']' && suffixIsCommentOrPadding?.[boundaryIndex + 1] === 1;
+  return boundaryIndex === value.length || value[boundaryIndex] === ',' || isArrayClosingBracket;
+}
+
 function findQuotedFlowItemEndAfterComma(
   value: string,
   commaIndex: number,
@@ -271,12 +294,13 @@ function findQuotedFlowItemEndAfterComma(
 ): number {
   const quoteIndex = scanIndex.nextNonWhitespace[commaIndex + 1];
   const closingQuoteIndex = scanIndex.matchingQuoteEnd[quoteIndex] ?? -1;
-  if (closingQuoteIndex === -1) return -1;
-
-  const boundaryIndex = scanIndex.nextNonWhitespace[closingQuoteIndex + 1];
-  const isArrayClosingBracket =
-    value[boundaryIndex] === ']' && scanIndex.suffixIsCommentOrPadding?.[boundaryIndex + 1] === 1;
-  return boundaryIndex === value.length || value[boundaryIndex] === ',' || isArrayClosingBracket
+  return closingQuoteIndex >= 0 &&
+    hasFlowItemBoundaryAfterQuote(
+      value,
+      closingQuoteIndex,
+      scanIndex.nextNonWhitespace,
+      scanIndex.suffixIsCommentOrPadding
+    )
     ? closingQuoteIndex
     : -1;
 }

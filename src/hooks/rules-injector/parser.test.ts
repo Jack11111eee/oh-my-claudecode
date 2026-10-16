@@ -216,6 +216,21 @@ describe('parseRuleFrontmatter trailing comments', () => {
     ]);
   });
 
+  it('keeps a literal quote from hiding a balanced brace closer', () => {
+    const firstPattern = `src/{a,'x',"}`;
+
+    expect(parse(`globs: [${firstPattern}, "docs/**", z/**]`).globs).toEqual([
+      firstPattern,
+      'docs/**',
+      'z/**',
+    ]);
+    expect(parse(`globs: [${firstPattern}, "docs/ #notes/**", z/**]`).globs).toEqual([
+      firstPattern,
+      'docs/ #notes/**',
+      'z/**',
+    ]);
+  });
+
   it('keeps brace-alternative quotes out of flow item boundaries', () => {
     const inlineArray = String.raw`globs: [src/{foo,'bar}, "docs/ #notes/**"] # see ]`;
     expect(parse(inlineArray).globs).toEqual(["src/{foo,'bar}", 'docs/ #notes/**']);
