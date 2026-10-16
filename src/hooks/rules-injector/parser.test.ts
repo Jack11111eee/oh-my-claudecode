@@ -102,6 +102,21 @@ describe('parseRuleFrontmatter brace globs', () => {
       'src/{foo,"bar",baz}',
       'docs/**',
     ]);
+    expect(parseGlobs('globs: [src/{foo,"bar}",baz}, docs/**]')).toEqual([
+      'src/{foo,"bar}",baz}',
+      'docs/**',
+    ]);
+  });
+
+  it('recovers each quoted item after successive unmatched braces', () => {
+    const itemCount = 64;
+    const flowItems =
+      Array.from({ length: itemCount }, (_, index) => `{,"item-${index}",`).join('') +
+      `{,"item-${itemCount}"`;
+
+    expect(parseGlobs(`globs: [${flowItems}]`)).toEqual(
+      Array.from({ length: itemCount + 1 }, (_, index) => ['{', `item-${index}`]).flat()
+    );
   });
 
   it('preserves escaped literal brace globs in a block array', () => {
