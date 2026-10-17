@@ -351,8 +351,10 @@ jobs:
           echo "📦 Tarball: $TARBALL"
 
           echo "🔎 Verifying the packaged MCP bridge omits retired merge-readiness tools..."
+          PACKAGED_MCP_SERVER="$RUNNER_TEMP/packaged-mcp-server.cjs"
+          tar -xzOf "$TARBALL" package/bridge/mcp-server.cjs > "$PACKAGED_MCP_SERVER"
           for tool in merge_readiness_start merge_readiness_set_content merge_readiness_record_answer merge_readiness_report merge_readiness_cancel; do
-            if tar -xOf "$TARBALL" package/bridge/mcp-server.cjs | grep -q "\"$tool\""; then
+            if grep -q "\"$tool\"" "$PACKAGED_MCP_SERVER"; then
               echo "::error::Retired merge-readiness tool remains registered in npm package: $tool"
               exit 1
             fi
@@ -360,14 +362,16 @@ jobs:
           done
 
           echo "🔎 Verifying contained-fs in packaged tarball (issue #4217)..."
+          PACKAGED_FILES="$RUNNER_TEMP/packaged-files.txt"
+          tar -tzf "$TARBALL" > "$PACKAGED_FILES"
           for script in scripts/build-contained-fs.mjs scripts/postinstall-contained-fs.mjs scripts/verify-graph-contained-fs.mjs; do
-            if ! tar -tzf "$TARBALL" | grep -q "package/$script"; then
+            if ! grep -q "package/$script" "$PACKAGED_FILES"; then
               echo "::error::npm package missing required script: $script"
               exit 1
             fi
             echo "✓ $script included in tarball"
           done
-          if ! tar -tzf "$TARBALL" | grep -q "package/native/contained-fs.c"; then
+          if ! grep -q "package/native/contained-fs.c" "$PACKAGED_FILES"; then
             echo "::error::npm package missing native source: native/contained-fs.c"
             exit 1
           fi
