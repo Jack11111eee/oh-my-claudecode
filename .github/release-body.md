@@ -1,41 +1,40 @@
-# oh-my-claudecode v5.7.2: add Muse and
+# oh-my-claudecode v5.7.4: More reliable hooks, team workflows, HUD, and Jev planning
 
 ## Release Notes
 
-Release with **1 new feature**, **3 bug fixes**, **6 other changes** across **10 merged PRs**.
+Release with **1 new feature**, **4 bug fixes**, **1 performance improvement**, and **3 test improvements** across **9 merged PRs**.
 
 ### Highlights
 
-- **feat(ask): add Muse and fix Grok role prompt transport**
+- **feat(jev): add OMC_JEV_PLAN_MODE to keep Jev from deciding in plan mode** (#4395)
+- **fix(team): quarantine stale Cursor verdicts and retain them on unreadable tasks** (#4380)
+- **perf(hooks): launch the file-context injectors only for the tools they act on** (#4373)
 
 ### New Features
 
-- **feat(ask): add Muse and fix Grok role prompt transport**
+- **feat(jev): add OMC_JEV_PLAN_MODE to keep Jev from deciding in plan mode** (#4395)
+
+### Performance Improvements
+
+- **perf(hooks): launch the file-context injectors only for the tools they act on** (#4373)
+  - File-context injectors now launch only for the tools they act on, reducing hook overhead.
 
 ### Bug Fixes
 
-- **fix(inventory): regenerate inventory graph after #4348**
-- **fix(test): set TMPDIR for grok/muse env vars test with Windows platform**
-- **fix(ask): mirror Muse ask guard in standalone hook and document Muse in README**
+- **fix(plugin-cache): link stale plugin roots only to a real cache directory** (#4375)
+- **fix(installer): log CLAUDE.md as already up to date when install leaves it unchanged** (#4377)
+- **fix(team): quarantine stale Cursor verdicts and retain them on unreadable tasks** (#4380)
+- **fix: scope HUD stdin cache per session using stdin.session_id** (#4398)
 
-### Documentation
+### Test Improvements
 
-- **docs: refresh inventory-graph baseline after features.md changes**
-- **docs: complete ultrawork removal from features.md**
-- **docs: remove retired ultrawork/web-clone references** (#4343)
-
-### Other Changes
-
-- **chore: rebind PR #4345 authorization to head 6d1e331a**
-- **chore: update PR #4345 authorization with final rebuilt head 36b49bd13**
-- **ci: rebind PR #4345 authorization to head 494758c7 and merge base 5a394754**
-- **ci: rebind PR #4345 authorization for new head commit (r10)**
-- **ci: rebind PR #4345 authorization for new head commit**
-- **ci: authorize stale tier-selector dist removal for PR #4345**
+- **test(run-cjs): blank user-level OMC env in the worker skip-guard hook spawns** (#4376)
+- **test(atomic-write): give SQLite contention timing bounds a runner margin** (#4385)
+- **test: make shutdown and state-clear race checks environment-independent** (#4379)
 
 ### Stats
 
-- **10 PRs merged** | **1 new feature** | **3 bug fixes** | **0 security/hardening improvements** | **6 other changes**
+- **9 PRs merged** | **1 new feature** | **4 bug fixes** | **1 performance improvement** | **3 test improvements**
 
 ### Install / Update
 
@@ -44,7 +43,7 @@ The npm CLI and the Claude Code marketplace/plugin are separate install tracks, 
 **CLI / runtime:**
 
 ```bash
-npm install -g oh-my-claude-sisyphus@5.7.2
+npm install -g oh-my-claude-sisyphus@5.7.4
 ```
 
 **Claude Code plugin:**
@@ -53,4 +52,4 @@ npm install -g oh-my-claude-sisyphus@5.7.2
 /plugin marketplace update omc
 ```
 
-**Full Changelog**: https://github.com/Yeachan-Heo/oh-my-claudecode/compare/v5.7.1...v5.7.2
+**Full Changelog**: https://github.com/Yeachan-Heo/oh-my-claudecode/compare/v5.7.3...v5.7.4

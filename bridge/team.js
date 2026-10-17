@@ -21739,6 +21739,7 @@ async function processCliWorkerVerdictsUnderLock(teamName, cwd, expectedInstance
       targetTaskPath = absPath(cwd, TeamPaths.taskFile(sanitized, nonCursorBinding.task_id));
       targetTaskVersion = nonCursorBinding.task_version;
     }
+    let cursorVerdictTask;
     for (const taskId of candidateTaskIds) {
       if (targetTaskId) break;
       if (!TASK_ID_SAFE_PATTERN.test(taskId)) continue;
@@ -21749,6 +21750,7 @@ async function processCliWorkerVerdictsUnderLock(teamName, cwd, expectedInstance
       } catch {
         continue;
       }
+      if (cursorReviewer) cursorVerdictTask = taskData;
       if (!taskData) continue;
       try {
         const taskRole = typeof taskData.role === "string" ? normalizeDelegationRole(taskData.role) : null;
@@ -21766,43 +21768,52 @@ async function processCliWorkerVerdictsUnderLock(teamName, cwd, expectedInstance
     }
     if (!targetTaskId || !targetTaskPath || targetTaskVersion === null) {
       if (cursorReviewer && verdictFile === processingOutputFile) {
-        const processedTaskPath = absPath(cwd, TeamPaths.taskFile(sanitized, payload.task_id));
-        try {
-          const processedTask = JSON.parse(readFileSync23(processedTaskPath, "utf-8"));
-          const metadata = processedTask.metadata && typeof processedTask.metadata === "object" ? processedTask.metadata : void 0;
-          const processedTaskRole = typeof processedTask.role === "string" ? normalizeDelegationRole(processedTask.role) : null;
-          const taskAlreadyRecorded = processedTask.owner === worker.name && (processedTask.status === "completed" || processedTask.status === "failed") && (!cursorReviewer || processedTaskRole === workerRole) && metadata?.verdict_source === "cli_worker_output_contract" && (!cursorReviewer || metadata.verdict_claim_token === payload.claim_token && metadata.verdict_task_version === payload.task_version) && (worker.launch_attempt_id === void 0 || metadata.verdict_worker_launch_attempt_id === worker.launch_attempt_id) && metadata.verdict === payload.verdict;
-          if (taskAlreadyRecorded) {
-            try {
-              await rename7(verdictFile, processedOutputFile);
-            } catch {
-            }
-            results.push({
-              workerName: worker.name,
-              taskId: payload.task_id,
-              status: "already_terminal",
-              verdict: payload.verdict
-            });
-            continue;
-          }
-          const currentClaim = processedTask.claim && typeof processedTask.claim === "object" ? processedTask.claim : null;
-          const activeClaimMismatch = processedTask.owner === worker.name && processedTask.status === "in_progress" && currentClaim?.owner === worker.name && (!cursorReviewer || processedTaskRole === workerRole);
-          if (activeClaimMismatch) {
-            try {
-              await rename7(verdictFile, processedOutputFile);
-            } catch {
-            }
-            results.push({
-              workerName: worker.name,
-              taskId: payload.task_id,
-              status: "skipped",
-              verdict: payload.verdict,
-              reason: "cursor_verdict_claim_mismatch"
-            });
-            continue;
-          }
-        } catch {
+        const reportCursorVerdictRetained = (error) => logCursorTransitionFailure(
+          outputFile,
+          worker.name,
+          payload.task_id,
+          payload.task_version ?? 0,
+          payload.claim_token ?? "",
+          worker.launch_attempt_id ?? payload.launch_attempt_id,
+          error
+        );
+        if (!cursorVerdictTask) {
+          await reportCursorVerdictRetained("task_unavailable");
+          results.push({
+            workerName: worker.name,
+            taskId: payload.task_id,
+            status: "skipped",
+            verdict: payload.verdict,
+            reason: "cursor_verdict_task_unavailable"
+          });
+          continue;
         }
+        const metadata = cursorVerdictTask.metadata;
+        const taskAlreadyRecorded = cursorVerdictTask.owner === worker.name && (cursorVerdictTask.status === "completed" || cursorVerdictTask.status === "failed") && typeof cursorVerdictTask.role === "string" && normalizeDelegationRole(cursorVerdictTask.role) === workerRole && metadata?.verdict_source === "cli_worker_output_contract" && metadata.verdict_claim_token === payload.claim_token && metadata.verdict_task_version === payload.task_version && (worker.launch_attempt_id === void 0 || metadata.verdict_worker_launch_attempt_id === worker.launch_attempt_id) && metadata.verdict === payload.verdict;
+        let quarantined = true;
+        try {
+          await rename7(verdictFile, processedOutputFile);
+        } catch {
+          quarantined = false;
+        }
+        if (taskAlreadyRecorded) {
+          results.push({
+            workerName: worker.name,
+            taskId: payload.task_id,
+            status: "already_terminal",
+            verdict: payload.verdict
+          });
+          continue;
+        }
+        if (!quarantined) await reportCursorVerdictRetained("stale_verdict_quarantine_failed");
+        results.push({
+          workerName: worker.name,
+          taskId: payload.task_id,
+          status: "skipped",
+          verdict: payload.verdict,
+          reason: quarantined ? "cursor_verdict_claim_mismatch" : "cursor_verdict_quarantine_failed"
+        });
+        continue;
       }
       await appendTeamEvent(sanitized, {
         type: "team_leader_nudge",

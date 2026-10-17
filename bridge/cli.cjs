@@ -32239,9 +32239,13 @@ function resolveSessionStatePath(stateName, sessionId, worktreeRoot) {
   const normalizedName = stateName.endsWith("-state") ? stateName : `${stateName}-state`;
   return resolveOmcPath(`state/sessions/${sessionId}/${normalizedName}.json`, worktreeRoot);
 }
-function resolveSessionStatePaths(stateName, sessionId, worktreeRoot, _opts) {
+function resolveSessionStatePaths(stateName, sessionId, worktreeRoot, opts) {
   const normalizedName = stateName.endsWith("-state") ? stateName : `${stateName}-state`;
-  const legacy = resolveStatePath(stateName, worktreeRoot);
+  const fileName = opts?.fileName ?? `${normalizedName}.json`;
+  if (opts?.fileName !== void 0 && (fileName.trim() !== fileName || !/^[A-Za-z0-9][A-Za-z0-9_-]*\.json$/.test(fileName))) {
+    throw new Error(`Invalid session state filename: ${fileName}`);
+  }
+  const legacy = opts?.fileName ? resolveOmcPath(`state/${fileName}`, worktreeRoot) : resolveStatePath(stateName, worktreeRoot);
   if (!sessionId) {
     return {
       sessionScoped: "",
@@ -32251,7 +32255,7 @@ function resolveSessionStatePaths(stateName, sessionId, worktreeRoot, _opts) {
     };
   }
   validateSessionId(sessionId);
-  const sessionScoped = resolveOmcPath(`state/sessions/${sessionId}/${normalizedName}.json`, worktreeRoot);
+  const sessionScoped = resolveOmcPath(`state/sessions/${sessionId}/${fileName}`, worktreeRoot);
   const effectiveRead = (0, import_fs14.existsSync)(sessionScoped) ? sessionScoped : legacy;
   return {
     sessionScoped,
@@ -47115,7 +47119,8 @@ function install(options = {}) {
       });
       if (!transaction.ok) throw new Error(transaction.error ?? "CLAUDE.md transaction failed");
       for (const backupPath of transaction.backups) log3(`Backed up existing CLAUDE.md to ${backupPath}`);
-      log3(transaction.operations.some((operation) => operation.type === "write" && operation.existedBefore && (0, import_path64.basename)(operation.path) === "CLAUDE.md") ? "Updated CLAUDE.md (merged with existing content)" : "Created CLAUDE.md");
+      const claudeMdWrite = transaction.operations.find((operation) => operation.type === "write" && (0, import_path64.basename)(operation.path) === "CLAUDE.md");
+      log3(!claudeMdWrite ? "CLAUDE.md already up to date" : claudeMdWrite.existedBefore ? "Updated CLAUDE.md (merged with existing content)" : "Created CLAUDE.md");
     }
     let hudScriptPath = null;
     const hudDisabledByOption = options.skipHud === true;
@@ -81456,6 +81461,7 @@ async function processCliWorkerVerdictsUnderLock(teamName, cwd2, expectedInstanc
       targetTaskPath = absPath(cwd2, TeamPaths.taskFile(sanitized, nonCursorBinding.task_id));
       targetTaskVersion = nonCursorBinding.task_version;
     }
+    let cursorVerdictTask;
     for (const taskId of candidateTaskIds) {
       if (targetTaskId) break;
       if (!TASK_ID_SAFE_PATTERN.test(taskId)) continue;
@@ -81466,6 +81472,7 @@ async function processCliWorkerVerdictsUnderLock(teamName, cwd2, expectedInstanc
       } catch {
         continue;
       }
+      if (cursorReviewer) cursorVerdictTask = taskData;
       if (!taskData) continue;
       try {
         const taskRole = typeof taskData.role === "string" ? normalizeDelegationRole(taskData.role) : null;
@@ -81483,43 +81490,52 @@ async function processCliWorkerVerdictsUnderLock(teamName, cwd2, expectedInstanc
     }
     if (!targetTaskId || !targetTaskPath || targetTaskVersion === null) {
       if (cursorReviewer && verdictFile === processingOutputFile) {
-        const processedTaskPath = absPath(cwd2, TeamPaths.taskFile(sanitized, payload.task_id));
-        try {
-          const processedTask = JSON.parse(readFileSync129(processedTaskPath, "utf-8"));
-          const metadata = processedTask.metadata && typeof processedTask.metadata === "object" ? processedTask.metadata : void 0;
-          const processedTaskRole = typeof processedTask.role === "string" ? normalizeDelegationRole(processedTask.role) : null;
-          const taskAlreadyRecorded = processedTask.owner === worker.name && (processedTask.status === "completed" || processedTask.status === "failed") && (!cursorReviewer || processedTaskRole === workerRole) && metadata?.verdict_source === "cli_worker_output_contract" && (!cursorReviewer || metadata.verdict_claim_token === payload.claim_token && metadata.verdict_task_version === payload.task_version) && (worker.launch_attempt_id === void 0 || metadata.verdict_worker_launch_attempt_id === worker.launch_attempt_id) && metadata.verdict === payload.verdict;
-          if (taskAlreadyRecorded) {
-            try {
-              await rename8(verdictFile, processedOutputFile);
-            } catch {
-            }
-            results.push({
-              workerName: worker.name,
-              taskId: payload.task_id,
-              status: "already_terminal",
-              verdict: payload.verdict
-            });
-            continue;
-          }
-          const currentClaim = processedTask.claim && typeof processedTask.claim === "object" ? processedTask.claim : null;
-          const activeClaimMismatch = processedTask.owner === worker.name && processedTask.status === "in_progress" && currentClaim?.owner === worker.name && (!cursorReviewer || processedTaskRole === workerRole);
-          if (activeClaimMismatch) {
-            try {
-              await rename8(verdictFile, processedOutputFile);
-            } catch {
-            }
-            results.push({
-              workerName: worker.name,
-              taskId: payload.task_id,
-              status: "skipped",
-              verdict: payload.verdict,
-              reason: "cursor_verdict_claim_mismatch"
-            });
-            continue;
-          }
-        } catch {
+        const reportCursorVerdictRetained = (error2) => logCursorTransitionFailure(
+          outputFile,
+          worker.name,
+          payload.task_id,
+          payload.task_version ?? 0,
+          payload.claim_token ?? "",
+          worker.launch_attempt_id ?? payload.launch_attempt_id,
+          error2
+        );
+        if (!cursorVerdictTask) {
+          await reportCursorVerdictRetained("task_unavailable");
+          results.push({
+            workerName: worker.name,
+            taskId: payload.task_id,
+            status: "skipped",
+            verdict: payload.verdict,
+            reason: "cursor_verdict_task_unavailable"
+          });
+          continue;
         }
+        const metadata = cursorVerdictTask.metadata;
+        const taskAlreadyRecorded = cursorVerdictTask.owner === worker.name && (cursorVerdictTask.status === "completed" || cursorVerdictTask.status === "failed") && typeof cursorVerdictTask.role === "string" && normalizeDelegationRole(cursorVerdictTask.role) === workerRole && metadata?.verdict_source === "cli_worker_output_contract" && metadata.verdict_claim_token === payload.claim_token && metadata.verdict_task_version === payload.task_version && (worker.launch_attempt_id === void 0 || metadata.verdict_worker_launch_attempt_id === worker.launch_attempt_id) && metadata.verdict === payload.verdict;
+        let quarantined = true;
+        try {
+          await rename8(verdictFile, processedOutputFile);
+        } catch {
+          quarantined = false;
+        }
+        if (taskAlreadyRecorded) {
+          results.push({
+            workerName: worker.name,
+            taskId: payload.task_id,
+            status: "already_terminal",
+            verdict: payload.verdict
+          });
+          continue;
+        }
+        if (!quarantined) await reportCursorVerdictRetained("stale_verdict_quarantine_failed");
+        results.push({
+          workerName: worker.name,
+          taskId: payload.task_id,
+          status: "skipped",
+          verdict: payload.verdict,
+          reason: quarantined ? "cursor_verdict_claim_mismatch" : "cursor_verdict_quarantine_failed"
+        });
+        continue;
       }
       await appendTeamEvent(sanitized, {
         type: "team_leader_nudge",
@@ -94299,32 +94315,59 @@ function normalizeCandidate(value) {
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
 }
-function getStdinCachePath() {
-  const root2 = getWorktreeRoot() || process.cwd();
+function getStdinCachePaths(stdin, root2 = getWorktreeRoot() || process.cwd()) {
   for (const envVar of SESSION_ID_ENV_VARS) {
     const candidate = normalizeCandidate(process.env[envVar]);
     if (!candidate) continue;
     try {
-      return (0, import_path150.join)(getSessionStateDir(candidate, root2), "hud-stdin-cache.json");
+      return resolveSessionStatePaths(HUD_STDIN_CACHE_STATE_NAME, candidate, root2, {
+        fileName: HUD_STDIN_CACHE_FILE_NAME
+      });
     } catch {
     }
   }
-  return resolveOmcPath("state/hud-stdin-cache.json", root2);
+  const stdinSessionId = stdin ? normalizeCandidate(stdin.session_id) : null;
+  if (stdinSessionId) {
+    try {
+      return resolveSessionStatePaths(HUD_STDIN_CACHE_STATE_NAME, stdinSessionId, root2, {
+        fileName: HUD_STDIN_CACHE_FILE_NAME
+      });
+    } catch {
+    }
+  }
+  return resolveSessionStatePaths(HUD_STDIN_CACHE_STATE_NAME, void 0, root2, {
+    fileName: HUD_STDIN_CACHE_FILE_NAME
+  });
 }
 function writeStdinCache(stdin) {
   try {
-    const cachePath = getStdinCachePath();
+    const cachePath = getStdinCachePaths(stdin).effectiveWrite;
     const cacheDir = (0, import_path150.dirname)(cachePath);
     if (!(0, import_fs125.existsSync)(cacheDir)) {
       (0, import_fs125.mkdirSync)(cacheDir, { recursive: true });
     }
-    (0, import_fs125.writeFileSync)(cachePath, JSON.stringify(stdin));
+    const newContent = JSON.stringify(stdin);
+    if ((0, import_fs125.existsSync)(cachePath)) {
+      try {
+        const existingContent = (0, import_fs125.readFileSync)(cachePath, "utf-8");
+        if (existingContent === newContent) {
+          const now = /* @__PURE__ */ new Date();
+          try {
+            (0, import_fs125.utimesSync)(cachePath, now, now);
+            return;
+          } catch {
+          }
+        }
+      } catch {
+      }
+    }
+    (0, import_fs125.writeFileSync)(cachePath, newContent);
   } catch {
   }
 }
 function readStdinCache() {
   const root2 = getWorktreeRoot() || process.cwd();
-  const scopedPath = getStdinCachePath();
+  const paths = getStdinCachePaths(void 0, root2);
   const tryRead = (p) => {
     try {
       if (!(0, import_fs125.existsSync)(p)) return null;
@@ -94333,11 +94376,10 @@ function readStdinCache() {
       return null;
     }
   };
-  const legacyPath = resolveOmcPath("state/hud-stdin-cache.json", root2);
-  if (scopedPath !== legacyPath) {
-    return tryRead(scopedPath);
+  if (paths.sessionScoped) {
+    return tryRead(paths.sessionScoped);
   }
-  return readMostRecentCache(root2, legacyPath);
+  return readMostRecentCache(root2, paths.legacy);
 }
 function parseCachedStdin(raw) {
   const parsed = JSON.parse(raw);
@@ -94360,7 +94402,9 @@ function readMostRecentCache(root2, legacyPath) {
   for (const sid of sessionIds) {
     let candidate;
     try {
-      candidate = (0, import_path150.join)(getSessionStateDir(sid, root2), "hud-stdin-cache.json");
+      candidate = resolveSessionStatePaths(HUD_STDIN_CACHE_STATE_NAME, sid, root2, {
+        fileName: HUD_STDIN_CACHE_FILE_NAME
+      }).sessionScoped;
     } catch {
       continue;
     }
@@ -94529,7 +94573,7 @@ function getModelName(stdin) {
   const displayName = stdin.model?.display_name?.trim();
   return displayName || getModelId(stdin);
 }
-var import_fs125, import_path150, TRANSIENT_CONTEXT_PERCENT_TOLERANCE, SESSION_ID_ENV_VARS;
+var import_fs125, import_path150, TRANSIENT_CONTEXT_PERCENT_TOLERANCE, SESSION_ID_ENV_VARS, HUD_STDIN_CACHE_STATE_NAME, HUD_STDIN_CACHE_FILE_NAME;
 var init_stdin = __esm({
   "src/hud/stdin.ts"() {
     "use strict";
@@ -94538,6 +94582,8 @@ var init_stdin = __esm({
     init_worktree_paths();
     TRANSIENT_CONTEXT_PERCENT_TOLERANCE = 3;
     SESSION_ID_ENV_VARS = ["CLAUDE_SESSION_ID", "CLAUDECODE_SESSION_ID"];
+    HUD_STDIN_CACHE_STATE_NAME = "hud-stdin-cache";
+    HUD_STDIN_CACHE_FILE_NAME = "hud-stdin-cache.json";
   }
 });
 
@@ -117814,7 +117860,7 @@ function buildHookRegistry(hooksJson) {
 }
 function selectApplicableEntries(registry2, event, matcherInput) {
   return registry2.filter(
-    (e) => e.event === event && (e.matcher === "*" || e.matcher === matcherInput)
+    (e) => e.event === event && (e.matcher === "*" || matcherInput !== void 0 && e.matcher.split("|").includes(matcherInput))
   ).sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
 }
 
