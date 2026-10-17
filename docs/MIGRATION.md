@@ -202,7 +202,7 @@ names no longer resolve. Use the replacement in the table below.
 | `swarm`                | `/oh-my-claudecode:team`                 | Declared-only                                                 |
 | `pipeline`             | `/oh-my-claudecode:execute`              | Declared-only                                                 |
 | `ultraqa`              | `/oh-my-claudecode:verify`               |                                                               |
-| `merge-readiness`      | `/oh-my-claudecode:review`               | Advisory review; release hard checks are unchanged            |
+| `merge-readiness`      | `/oh-my-claudecode:review`               | MCP tools and runtime are removed; review stays advisory; release hard checks are unchanged |
 | `deep-dive`            | `/oh-my-claudecode:research`             |                                                               |
 | `sciomc`               | `/oh-my-claudecode:research`             |                                                               |
 | `ccg`                  | `/oh-my-claudecode:ask` + `/team`        | Run `/ask codex` and `/ask antigravity`, then synthesize      |
