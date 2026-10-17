@@ -5,15 +5,15 @@
   "provenance": {
     "base": "05c800f40d1ad53b42a78609d2667ef4f726808b",
     "planningHead": "0a91273e61dbbd47eb0af4c02844409251e08398",
-    "head": "ef9c40457cafd89c404682c5d3f8d182d737344a",
-    "sourceSha256": "2147f2edfd72d1a27c9aef540f859ce6ab6522e02b7e73e8ff11334dd3182766",
+    "head": "363d7ba0dee521b40a16cdd0605cc62d2142080f",
+    "sourceSha256": "89ef00a21b59e724ca099490a7441bb1519d38a24e49e401487a560515c9e124",
     "generatedAt": null,
     "generator": "scripts/generate-inventory-graph.mjs"
   },
   "base": "05c800f40d1ad53b42a78609d2667ef4f726808b",
   "planningHead": "0a91273e61dbbd47eb0af4c02844409251e08398",
-  "head": "ef9c40457cafd89c404682c5d3f8d182d737344a",
-  "sourceSha256": "2147f2edfd72d1a27c9aef540f859ce6ab6522e02b7e73e8ff11334dd3182766",
+  "head": "363d7ba0dee521b40a16cdd0605cc62d2142080f",
+  "sourceSha256": "89ef00a21b59e724ca099490a7441bb1519d38a24e49e401487a560515c9e124",
   "counts": {
     "public": {
       "skills": 48,
@@ -32,9 +32,9 @@
       "total": 1492
     },
     "generated": {
-      "distFiles": 5581,
+      "distFiles": 5589,
       "bridgeFiles": 9,
-      "total": 5590
+      "total": 5598
     },
     "prompt": {
       "promptLikeFiles": 61
@@ -2888,6 +2888,14 @@
       "dist/features/state-manager/index.d.ts.map",
       "dist/features/state-manager/index.js",
       "dist/features/state-manager/index.js.map",
+      "dist/features/state-manager/list-cleanup.d.ts",
+      "dist/features/state-manager/list-cleanup.d.ts.map",
+      "dist/features/state-manager/list-cleanup.js",
+      "dist/features/state-manager/list-cleanup.js.map",
+      "dist/features/state-manager/state-paths.d.ts",
+      "dist/features/state-manager/state-paths.d.ts.map",
+      "dist/features/state-manager/state-paths.js",
+      "dist/features/state-manager/state-paths.js.map",
       "dist/features/state-manager/types.d.ts",
       "dist/features/state-manager/types.d.ts.map",
       "dist/features/state-manager/types.js",
@@ -17859,6 +17867,46 @@
         "id": "dist/features/state-manager/index.js.map",
         "kind": "generated-dist",
         "path": "dist/features/state-manager/index.js.map"
+      },
+      {
+        "id": "dist/features/state-manager/list-cleanup.d.ts",
+        "kind": "generated-dist",
+        "path": "dist/features/state-manager/list-cleanup.d.ts"
+      },
+      {
+        "id": "dist/features/state-manager/list-cleanup.d.ts.map",
+        "kind": "generated-dist",
+        "path": "dist/features/state-manager/list-cleanup.d.ts.map"
+      },
+      {
+        "id": "dist/features/state-manager/list-cleanup.js",
+        "kind": "generated-dist",
+        "path": "dist/features/state-manager/list-cleanup.js"
+      },
+      {
+        "id": "dist/features/state-manager/list-cleanup.js.map",
+        "kind": "generated-dist",
+        "path": "dist/features/state-manager/list-cleanup.js.map"
+      },
+      {
+        "id": "dist/features/state-manager/state-paths.d.ts",
+        "kind": "generated-dist",
+        "path": "dist/features/state-manager/state-paths.d.ts"
+      },
+      {
+        "id": "dist/features/state-manager/state-paths.d.ts.map",
+        "kind": "generated-dist",
+        "path": "dist/features/state-manager/state-paths.d.ts.map"
+      },
+      {
+        "id": "dist/features/state-manager/state-paths.js",
+        "kind": "generated-dist",
+        "path": "dist/features/state-manager/state-paths.js"
+      },
+      {
+        "id": "dist/features/state-manager/state-paths.js.map",
+        "kind": "generated-dist",
+        "path": "dist/features/state-manager/state-paths.js.map"
       },
       {
         "id": "dist/features/state-manager/types.d.ts",
@@ -88354,12 +88402,12 @@
       }
     ],
     "stats": {
-      "nodeCount": 7711,
+      "nodeCount": 7719,
       "edgeCount": 8544,
       "importEdgeCount": 7104,
       "registerEdgeCount": 69
     }
   },
   "inventorySha256": "bc60efcf26c91fe25e3dcf72bd78ea0f55177cf5f9124a706ef05cb8a04a3973",
-  "manifestSha256": "8ac42f37cad3b9827a439d47f41d521e74adf08d78b07f47ebc275497e61bb4a"
+  "manifestSha256": "5c65d4329d69494e3ab415afda36312e63cf8e96520fcffa9faf1742dee8f8c0"
 }
