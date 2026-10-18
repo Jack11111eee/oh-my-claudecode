@@ -63507,8 +63507,8 @@ var init_routing = __esm({
 
 // src/hooks/session-end/guardrails.ts
 function dailyChainLimit() {
-  const raw = Number(process.env.OMC_DAILY_CHAIN_LIMIT);
-  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : DAILY_CHAIN_LIMIT;
+  const raw = Math.floor(Number(process.env.OMC_DAILY_CHAIN_LIMIT));
+  return Number.isFinite(raw) && raw >= 1 ? raw : DAILY_CHAIN_LIMIT;
 }
 function chainDayKey(now = /* @__PURE__ */ new Date()) {
   const y = now.getFullYear();
@@ -101476,12 +101476,52 @@ function findLastCompactBoundaryEndOffset(transcriptPath, size) {
   }
   return null;
 }
+function countLocalApiRequestRecordBytes(transcriptPath, start, end) {
+  if (end <= start) return 0;
+  const fd = (0, import_fs145.openSync)(transcriptPath, "r");
+  try {
+    const chunk = Buffer.allocUnsafe(SCAN_CHUNK_BYTES);
+    const prefix = Buffer.allocUnsafe(LOCAL_API_REQUEST_PREFIX.length);
+    let excludedBytes = 0;
+    let lineStart = start;
+    const countLine = (lineEndExclusive) => {
+      const lineLength = lineEndExclusive - lineStart;
+      if (lineLength >= prefix.length) {
+        const bytesRead = (0, import_fs145.readSync)(fd, prefix, 0, prefix.length, lineStart);
+        if (bytesRead === prefix.length && prefix.equals(LOCAL_API_REQUEST_PREFIX)) {
+          excludedBytes += lineLength;
+        }
+      }
+      lineStart = lineEndExclusive;
+    };
+    let position = start;
+    while (position < end) {
+      const length = Math.min(SCAN_CHUNK_BYTES, end - position);
+      (0, import_fs145.readSync)(fd, chunk, 0, length, position);
+      const view = chunk.subarray(0, length);
+      let newline = view.indexOf(10);
+      while (newline !== -1) {
+        countLine(position + newline + 1);
+        newline = view.indexOf(10, newline + 1);
+      }
+      position += length;
+    }
+    if (lineStart < end) countLine(end);
+    return excludedBytes;
+  } finally {
+    (0, import_fs145.closeSync)(fd);
+  }
+}
 function estimateTranscriptPayloadBytes(transcriptPath, size) {
   const boundaryEndOffset = findLastCompactBoundaryEndOffset(
     transcriptPath,
     size
   );
-  return boundaryEndOffset === null ? size : Math.max(0, size - boundaryEndOffset);
+  const start = boundaryEndOffset ?? 0;
+  return Math.max(
+    0,
+    size - start - countLocalApiRequestRecordBytes(transcriptPath, start, size)
+  );
 }
 function estimatePayloadFromTranscriptPath(transcriptPath) {
   if (!transcriptPath || !(0, import_fs145.existsSync)(transcriptPath)) return null;
@@ -101495,7 +101535,7 @@ function estimatePayloadFromTranscriptPath(transcriptPath) {
     return null;
   }
 }
-var import_fs145, ANTHROPIC_REQUEST_PAYLOAD_LIMIT_BYTES, PAYLOAD_WARNING_BYTES, PAYLOAD_CRITICAL_BYTES, COMPACT_BOUNDARY_MARKER, COMPACT_BOUNDARY_MARKER_BYTES, SCAN_CHUNK_BYTES, MAX_BOUNDARY_LINE_BYTES;
+var import_fs145, ANTHROPIC_REQUEST_PAYLOAD_LIMIT_BYTES, PAYLOAD_WARNING_BYTES, PAYLOAD_CRITICAL_BYTES, COMPACT_BOUNDARY_MARKER, COMPACT_BOUNDARY_MARKER_BYTES, LOCAL_API_REQUEST_PREFIX, SCAN_CHUNK_BYTES, MAX_BOUNDARY_LINE_BYTES;
 var init_payload_estimate = __esm({
   "src/hud/payload-estimate.ts"() {
     "use strict";
@@ -101505,6 +101545,7 @@ var init_payload_estimate = __esm({
     PAYLOAD_CRITICAL_BYTES = 26e6;
     COMPACT_BOUNDARY_MARKER = "compact_boundary";
     COMPACT_BOUNDARY_MARKER_BYTES = Buffer.from(COMPACT_BOUNDARY_MARKER);
+    LOCAL_API_REQUEST_PREFIX = Buffer.from('{"type":"api-request');
     SCAN_CHUNK_BYTES = 64 * 1024;
     MAX_BOUNDARY_LINE_BYTES = 256 * 1024;
   }
@@ -126030,6 +126071,20 @@ async function teamCommand(args) {
   }
 }
 
+// src/cli/utils/integer-option.ts
+function integerOption(min, max = Number.MAX_SAFE_INTEGER) {
+  return (value) => {
+    const normalized = value.trim();
+    const parsed = Number(normalized);
+    if (!/^[+-]?\d+$/.test(normalized) || !Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
+      throw new InvalidArgumentError(
+        max === Number.MAX_SAFE_INTEGER ? `must be an integer of at least ${min}` : `must be an integer between ${min} and ${max}`
+      );
+    }
+    return parsed;
+  };
+}
+
 // src/cli/commands/ralphthon.ts
 init_tmux_utils();
 var import_fs131 = require("fs");
@@ -126570,6 +126625,17 @@ Examples:
   omc ralphthon --resume
   omc ralphthon --max-waves 5 --poll-interval 60 "Add caching layer"
 `;
+var parsePositiveInteger = integerOption(1);
+function parsePositiveIntegerFlag(flag, value) {
+  if (value === void 0) {
+    throw new Error(`${flag} requires a value`);
+  }
+  try {
+    return parsePositiveInteger(value);
+  } catch (error2) {
+    throw new Error(`${flag} ${error2.message} (got "${value}")`);
+  }
+}
 function parseRalphthonArgs(args) {
   const options = {
     resume: false,
@@ -126587,16 +126653,12 @@ function parseRalphthonArgs(args) {
       case "--skip-interview":
         options.skipInterview = true;
         break;
-      case "--max-waves": {
-        const val = parseInt(args[++i], 10);
-        if (!isNaN(val) && val > 0) options.maxWaves = val;
+      case "--max-waves":
+        options.maxWaves = parsePositiveIntegerFlag("--max-waves", args[++i]);
         break;
-      }
-      case "--poll-interval": {
-        const val = parseInt(args[++i], 10);
-        if (!isNaN(val) && val > 0) options.pollInterval = val;
+      case "--poll-interval":
+        options.pollInterval = parsePositiveIntegerFlag("--poll-interval", args[++i]);
         break;
-      }
       case "--help":
       case "-h":
         console.log(RALPHTHON_HELP);
@@ -126759,7 +126821,13 @@ function isInsideTmux2() {
   return !!process.env.TMUX;
 }
 async function ralphthonCommand(args) {
-  const options = parseRalphthonArgs(args);
+  let options;
+  try {
+    options = parseRalphthonArgs(args);
+  } catch (error2) {
+    console.error(source_default.red(error2.message));
+    process.exit(1);
+  }
   const cwd2 = process.cwd();
   if (options.resume) {
     const state = readRalphthonState(cwd2);
@@ -131398,20 +131466,6 @@ function intakeCommand() {
     process.exitCode = result.exitCode;
   });
   return cmd;
-}
-
-// src/cli/utils/integer-option.ts
-function integerOption(min, max = Number.MAX_SAFE_INTEGER) {
-  return (value) => {
-    const normalized = value.trim();
-    const parsed = Number(normalized);
-    if (!/^[+-]?\d+$/.test(normalized) || !Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
-      throw new InvalidArgumentError(
-        max === Number.MAX_SAFE_INTEGER ? `must be an integer of at least ${min}` : `must be an integer between ${min} and ${max}`
-      );
-    }
-    return parsed;
-  };
 }
 
 // src/cli/commands/factory.ts

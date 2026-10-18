@@ -1,19 +1,19 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-18T01:40:56.152Z",
+  "generatedAt": "2026-10-18T07:12:17.000Z",
   "repository": "Yeachan-Heo/oh-my-claudecode",
   "provenance": {
     "base": "05c800f40d1ad53b42a78609d2667ef4f726808b",
     "planningHead": "0a91273e61dbbd47eb0af4c02844409251e08398",
-    "head": "76910e95d78382cf6bc4fe972bea353e44299a6d",
-    "sourceSha256": "14c70aa0b84b38c748e3f0e11ce92b8c8c30311cad1af84ebb64e3bdea823183",
-    "generatedAt": "2026-10-18T01:40:56.152Z",
+    "head": "73bc01795a791dd7c69514be043b2bb13330b370",
+    "sourceSha256": "c1002cdfab04a9ce4a7b37ece218757eb6cbbc8a3742c4d775bda8b929be0682",
+    "generatedAt": "2026-10-18T07:12:17.000Z",
     "generator": "scripts/generate-inventory-graph.mjs"
   },
   "base": "05c800f40d1ad53b42a78609d2667ef4f726808b",
   "planningHead": "0a91273e61dbbd47eb0af4c02844409251e08398",
-  "head": "76910e95d78382cf6bc4fe972bea353e44299a6d",
-  "sourceSha256": "14c70aa0b84b38c748e3f0e11ce92b8c8c30311cad1af84ebb64e3bdea823183",
+  "head": "73bc01795a791dd7c69514be043b2bb13330b370",
+  "sourceSha256": "c1002cdfab04a9ce4a7b37ece218757eb6cbbc8a3742c4d775bda8b929be0682",
   "counts": {
     "public": {
       "skills": 48,
@@ -32,9 +32,9 @@
       "total": 1492
     },
     "generated": {
-      "distFiles": 5589,
+      "distFiles": 5593,
       "bridgeFiles": 9,
-      "total": 5598
+      "total": 5602
     },
     "prompt": {
       "promptLikeFiles": 61
@@ -2485,6 +2485,10 @@
       "dist/cli/utils/formatting.d.ts.map",
       "dist/cli/utils/formatting.js",
       "dist/cli/utils/formatting.js.map",
+      "dist/cli/utils/integer-option.d.ts",
+      "dist/cli/utils/integer-option.d.ts.map",
+      "dist/cli/utils/integer-option.js",
+      "dist/cli/utils/integer-option.js.map",
       "dist/cli/win32-warning.d.ts",
       "dist/cli/win32-warning.d.ts.map",
       "dist/cli/win32-warning.js",
@@ -15852,6 +15856,26 @@
         "id": "dist/cli/utils/formatting.js.map",
         "kind": "generated-dist",
         "path": "dist/cli/utils/formatting.js.map"
+      },
+      {
+        "id": "dist/cli/utils/integer-option.d.ts",
+        "kind": "generated-dist",
+        "path": "dist/cli/utils/integer-option.d.ts"
+      },
+      {
+        "id": "dist/cli/utils/integer-option.d.ts.map",
+        "kind": "generated-dist",
+        "path": "dist/cli/utils/integer-option.d.ts.map"
+      },
+      {
+        "id": "dist/cli/utils/integer-option.js",
+        "kind": "generated-dist",
+        "path": "dist/cli/utils/integer-option.js"
+      },
+      {
+        "id": "dist/cli/utils/integer-option.js.map",
+        "kind": "generated-dist",
+        "path": "dist/cli/utils/integer-option.js.map"
       },
       {
         "id": "dist/cli/win32-warning.d.ts",
@@ -88407,12 +88431,12 @@
       }
     ],
     "stats": {
-      "nodeCount": 7719,
+      "nodeCount": 7723,
       "edgeCount": 8545,
       "importEdgeCount": 7105,
       "registerEdgeCount": 69
     }
   },
   "inventorySha256": "bc60efcf26c91fe25e3dcf72bd78ea0f55177cf5f9124a706ef05cb8a04a3973",
-  "manifestSha256": "03da51502db8e527a6138be0ecc2af4ae1c44b61aec1c26087cc0a1c2c3c77c4"
+  "manifestSha256": "40e4eeecece9a1c66d2eb70a9de338cbee56f9919f747ebf9b158dfad403efd1"
 }
