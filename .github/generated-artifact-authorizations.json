@@ -11,46 +11,10 @@
       "owner": "Yeachan-Heo",
       "expiresAt": "2027-01-16T08:47:01.000Z",
       "generatedDelta": {
-        "count": 184,
-        "sha256": "720bf82b99719c8fe19e9a6dec84515e6a83a95e33ed00f7b4cb90d7ff62663b"
+        "count": 173,
+        "sha256": "d6f1e2cbc216f1c14bad957c2354efbb192550819aca4a8f46767557ef4123f4"
       },
       "generatedFiles": [
-        {
-          "status": "modified",
-          "filename": ".claude-plugin/marketplace.json",
-          "sha": "b1ff9d8dc78c39a07cd3e7cc9d6fc204f2d0f3f8",
-          "previousFilename": null
-        },
-        {
-          "status": "modified",
-          "filename": ".claude-plugin/plugin.json",
-          "sha": "c3435e658ae6351414315b259dc8f201a9832dba",
-          "previousFilename": null
-        },
-        {
-          "status": "modified",
-          "filename": ".github/CLAUDE.md",
-          "sha": "af098b28b35bbfc86c03515ea45db39cb13027f6",
-          "previousFilename": null
-        },
-        {
-          "status": "modified",
-          "filename": ".github/generated-artifact-authorizations.json",
-          "sha": "ade03508fd38497e3d47013eaedababe8a9e0e05",
-          "previousFilename": null
-        },
-        {
-          "status": "modified",
-          "filename": "CHANGELOG.md",
-          "sha": "615cca84a210c44330dab259601070029d9145ea",
-          "previousFilename": null
-        },
-        {
-          "status": "modified",
-          "filename": "CLAUDE.md",
-          "sha": "af098b28b35bbfc86c03515ea45db39cb13027f6",
-          "previousFilename": null
-        },
         {
           "status": "modified",
           "filename": "bridge/claude-md-coordinator.cjs",
@@ -1087,36 +1051,6 @@
           "status": "modified",
           "filename": "dist/utils/frontmatter.js.map",
           "sha": "e8abf0ee8a5962ecbf9dbd76226a45accdf0f2ba",
-          "previousFilename": null
-        },
-        {
-          "status": "modified",
-          "filename": "docs/CLAUDE.md",
-          "sha": "af098b28b35bbfc86c03515ea45db39cb13027f6",
-          "previousFilename": null
-        },
-        {
-          "status": "modified",
-          "filename": "inventory/inventory-graph.json",
-          "sha": "027e27cfa185e47d192a49a765f72af614f7faf2",
-          "previousFilename": null
-        },
-        {
-          "status": "modified",
-          "filename": "package-lock.json",
-          "sha": "db85f329d81995ed95a3fa8a3fe316fe51f2fa75",
-          "previousFilename": null
-        },
-        {
-          "status": "modified",
-          "filename": "package.json",
-          "sha": "f73f6c52efaccc912947563268507f630e0c3e98",
-          "previousFilename": null
-        },
-        {
-          "status": "modified",
-          "filename": "tests/fixtures/prompt-projection/claude-managed-block.golden",
-          "sha": "af098b28b35bbfc86c03515ea45db39cb13027f6",
           "previousFilename": null
         }
       ]
