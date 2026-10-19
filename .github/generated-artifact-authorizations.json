@@ -31354,6 +31354,320 @@
           "previousFilename": null
         }
       ]
+    },
+    {
+      "pullNumber": 4456,
+      "targetRef": "main",
+      "mergeBaseSha": "6688a30e90d7285ff336af2dc5ab4b9709f1a8bc",
+      "headSha": "9180b5ca9f33fbbeded9e55710bc4b85f2557306",
+      "owner": "Yeachan-Heo",
+      "expiresAt": "2026-10-24T00:00:00.000Z",
+      "generatedDelta": {
+        "count": 50,
+        "sha256": "93b32372d1ab04ef4ea0e7134199889bb66a02b0ee68ddacb57ff7084c0c6b06"
+      },
+      "generatedFiles": [
+        {
+          "status": "modified",
+          "filename": "bridge/claude-md-coordinator.cjs",
+          "sha": "3f82d1569be7058089db210d9d751836ebbe9228",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "bridge/cli.cjs",
+          "sha": "34f4c65480129a41f69d49cf872ea81e0a2d34b1",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "bridge/mcp-server.cjs",
+          "sha": "4ef3bb88f6515b51cd31c48a0bc65ceab8d4d33c",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "bridge/runtime-cli.cjs",
+          "sha": "b5c7d342003bb926b836d277b12e560afdc5bd70",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "bridge/team-mcp.cjs",
+          "sha": "932bfaca2a5927b383a899d68424c0c0e4d6f009",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "bridge/team.js",
+          "sha": "f566bf11ff6c0dc9c0aadd6eb230a98dbcee1498",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/__tests__/featured-contributors-generator.test.js",
+          "sha": "441eee7830617d4bda9cf76687a02ad6ff9f4f51",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/__tests__/featured-contributors-generator.test.js.map",
+          "sha": "c29bb6319d6da3e9e577abee46502b721310fd2e",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/__tests__/hud/payload-estimate.test.js",
+          "sha": "96959d09937ef216d8875108c27c5e4c70164e27",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/__tests__/hud/payload-estimate.test.js.map",
+          "sha": "edcde1a4bac097e139965d9438b988864ffd30bd",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/__tests__/load-agent-prompt.test.js",
+          "sha": "361dd540e91aa61ee764f14b3fcc3b54b7476206",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/__tests__/load-agent-prompt.test.js.map",
+          "sha": "e95bb5ddf17e6dd3195c022a4b81593edfa48bae",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/agents/utils.d.ts",
+          "sha": "dc9745411e3efe6fa12f35a55716cfd143a3057e",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/agents/utils.d.ts.map",
+          "sha": "f352511ff84dd165530a266628ad7581b44f1d57",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/agents/utils.js",
+          "sha": "a5db0aecf0db8f09a32a3847a9c1b1f86c48d1b7",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/agents/utils.js.map",
+          "sha": "35ee1ebb0ba1bb10b61c2f66ae43891c8f9ed0dd",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/autoresearch/__tests__/contracts.test.js",
+          "sha": "fda0d3784fc8c9a02609efbb06af6019a6ca13fd",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/autoresearch/__tests__/contracts.test.js.map",
+          "sha": "248a944f332641206d9ec1a76c12cd0223c25f80",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/autoresearch/contracts.d.ts.map",
+          "sha": "85eef7cc879e666406f738e33c408ae8deb8ce0d",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/autoresearch/contracts.js",
+          "sha": "6fec62fc1f5de7ffa3548eb8d49f7cd967750bc0",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/autoresearch/contracts.js.map",
+          "sha": "80ea1118f8a46d443384919dbc6498fc2aa676ef",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/cli/__tests__/team.test.js",
+          "sha": "ae855596eed8a8add346185013f167a7b4f85354",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/cli/__tests__/team.test.js.map",
+          "sha": "a6cfc7e01655b30384fccc155aef9aae15144b51",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/cli/commands/ralphthon.d.ts",
+          "sha": "3ddd85c21b71461480c75bbe159b4e742ce7b57e",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/cli/commands/ralphthon.d.ts.map",
+          "sha": "2ee1d072550c597a0a687896984b7b5d87cc1cf1",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/cli/commands/ralphthon.js",
+          "sha": "f4693cf3a9dffcef91fb08b4d85358bfb41f198b",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/cli/commands/ralphthon.js.map",
+          "sha": "4de76980cdebfb144566da714b4a7aa65c2a8680",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/cli/team.d.ts.map",
+          "sha": "0d44b8a349222f05f4b18e296095700b61c14205",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/cli/team.js",
+          "sha": "f696d96620606de09fe2a222787e675cca8dd98a",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/cli/team.js.map",
+          "sha": "384701afbd522e843b49fc60b16ef0740567a57e",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/hooks/auto-slash-command/constants.d.ts.map",
+          "sha": "81862c03f52a3cdb8820636c25105905c6f6df12",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/hooks/auto-slash-command/constants.js",
+          "sha": "76005987413b7fee6a86dd12053301a46d51edb2",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/hooks/auto-slash-command/constants.js.map",
+          "sha": "96f2c91895fd4ede1c1ca26b2378a4e5de09c915",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/hooks/session-end/__tests__/guardrails.test.js",
+          "sha": "1e97e8ce5579f9d602aa456bc62fca405599dc14",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/hooks/session-end/__tests__/guardrails.test.js.map",
+          "sha": "4e69aa616b7cbb68d1a2c4fad79d4632e048548d",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/hooks/session-end/guardrails.d.ts.map",
+          "sha": "60b9c28052160a21dbbd28abeec6a8e6ba3a26e1",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/hooks/session-end/guardrails.js",
+          "sha": "191873da945685b3fdfc5df8247af500878dec6f",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/hooks/session-end/guardrails.js.map",
+          "sha": "b1bb3c99fc816e9a0da1dd15bd3e620a2bdfd6e3",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/hud/payload-estimate.d.ts.map",
+          "sha": "89f5cccbac2bfe6c31753429216b33379917e6a1",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/hud/payload-estimate.js",
+          "sha": "40b2d915ead9001e092cfaed42302aaf8ca855a9",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/hud/payload-estimate.js.map",
+          "sha": "6b41ef7762f8f763294a8f82b615eb95ffba0bdd",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/lib/featured-contributors.d.ts",
+          "sha": "d3463d0afa115bbdbba4153996bd9e88f7f84013",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/lib/featured-contributors.d.ts.map",
+          "sha": "4d5d7ecbca0a6ddfd3c69c91fa495b893f7acc1f",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/lib/featured-contributors.js",
+          "sha": "60a1ce34f6cc4b72976a40a51b126efaf90372b8",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/lib/featured-contributors.js.map",
+          "sha": "3ee815dc1d0803125a83c5feaa212fce343a36e1",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/lib/security-config.d.ts.map",
+          "sha": "93a1cf18d138fc8b8f4ef5a2c370680ea9cd1597",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/lib/security-config.js",
+          "sha": "0a47c622255cd4913245bf9f10f7b9ee8821d1e7",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/lib/security-config.js.map",
+          "sha": "506e920d15688b90f3cafda6e611346c7e3e728e",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/ralphthon/__tests__/cli.test.js",
+          "sha": "19311a4437c0c222e337f884ac3023aded95c021",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/ralphthon/__tests__/cli.test.js.map",
+          "sha": "3b2e4cd9fcfb08f0c45935e04a52e25976f3bf6f",
+          "previousFilename": null
+        }
+      ]
     }
   ]
 }
