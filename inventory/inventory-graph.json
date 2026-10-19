@@ -1,19 +1,19 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-18T18:11:13.878Z",
+  "generatedAt": null,
   "repository": "Yeachan-Heo/oh-my-claudecode",
   "provenance": {
     "base": "05c800f40d1ad53b42a78609d2667ef4f726808b",
     "planningHead": "0a91273e61dbbd47eb0af4c02844409251e08398",
-    "head": "f28490d324bf52fb326fdcffb9ca1e956eea85a9",
-    "sourceSha256": "4c1e25d0460fd1da1bb655bb57105cde602fbcb6a52d26a2b95d61f89fd128e1",
-    "generatedAt": "2026-10-18T18:11:13.878Z",
+    "head": "c36dda27ccf36c6ff00b9edd78a049479d00bf30",
+    "sourceSha256": "ef9a1a9c86ad3f7b04527411283f3467617b00d8ace1dec228c170c94daaca67",
+    "generatedAt": null,
     "generator": "scripts/generate-inventory-graph.mjs"
   },
   "base": "05c800f40d1ad53b42a78609d2667ef4f726808b",
   "planningHead": "0a91273e61dbbd47eb0af4c02844409251e08398",
-  "head": "f28490d324bf52fb326fdcffb9ca1e956eea85a9",
-  "sourceSha256": "4c1e25d0460fd1da1bb655bb57105cde602fbcb6a52d26a2b95d61f89fd128e1",
+  "head": "c36dda27ccf36c6ff00b9edd78a049479d00bf30",
+  "sourceSha256": "ef9a1a9c86ad3f7b04527411283f3467617b00d8ace1dec228c170c94daaca67",
   "counts": {
     "public": {
       "skills": 48,
@@ -45506,6 +45506,11 @@
         "path": "tests/integration/multirepo-workspace.test.ts"
       },
       {
+        "id": "tests/integration/plugin-hud-node-modules-free.test.ts",
+        "kind": "other",
+        "path": "tests/integration/plugin-hud-node-modules-free.test.ts"
+      },
+      {
         "id": "tests/integration/runs-reconciler.test.ts",
         "kind": "other",
         "path": "tests/integration/runs-reconciler.test.ts"
@@ -74419,11 +74424,6 @@
       },
       {
         "from": "src/lib/security-config.ts",
-        "to": "external:zod",
-        "kind": "imports"
-      },
-      {
-        "from": "src/lib/security-config.ts",
         "to": "src/utils/jsonc.ts",
         "kind": "imports"
       },
@@ -87683,6 +87683,36 @@
         "kind": "imports"
       },
       {
+        "from": "tests/integration/plugin-hud-node-modules-free.test.ts",
+        "to": "external:node:child_process",
+        "kind": "imports"
+      },
+      {
+        "from": "tests/integration/plugin-hud-node-modules-free.test.ts",
+        "to": "external:node:fs",
+        "kind": "imports"
+      },
+      {
+        "from": "tests/integration/plugin-hud-node-modules-free.test.ts",
+        "to": "external:node:os",
+        "kind": "imports"
+      },
+      {
+        "from": "tests/integration/plugin-hud-node-modules-free.test.ts",
+        "to": "external:node:path",
+        "kind": "imports"
+      },
+      {
+        "from": "tests/integration/plugin-hud-node-modules-free.test.ts",
+        "to": "external:node:url",
+        "kind": "imports"
+      },
+      {
+        "from": "tests/integration/plugin-hud-node-modules-free.test.ts",
+        "to": "external:vitest",
+        "kind": "imports"
+      },
+      {
         "from": "tests/integration/runs-reconciler.test.ts",
         "to": "external:node:child_process",
         "kind": "imports"
@@ -88429,12 +88459,12 @@
       }
     ],
     "stats": {
-      "nodeCount": 7720,
-      "edgeCount": 8548,
-      "importEdgeCount": 7108,
+      "nodeCount": 7721,
+      "edgeCount": 8553,
+      "importEdgeCount": 7113,
       "registerEdgeCount": 69
     }
   },
-  "inventorySha256": "c2d02e07c79c083d3240b2fafb5a2ace78f256f3a90a85d9f68bdaac5c3fed59",
-  "manifestSha256": "f1c222926ef306d15103c6dd73f6fb244868d85a5e3d66b7c39d6eea3c973f2a"
+  "inventorySha256": "56ed15b99f83efd0887c014ccbee0a352b7aa5a10d62f51246c2392033beedff",
+  "manifestSha256": "ec99f68c36b8534975717f1c5d3f7f8299965b443a9d5198c1eec0a0c97f8e74"
 }
