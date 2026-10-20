@@ -1280,6 +1280,16 @@ function isSingleShellCommand(command) {
     && !/[\n\r;&|`]|\$\(|<\(|>\(/.test(command);
 }
 
+const OMC_CLI_PREFIX_PATTERN = /^(?:(?:node|nodejs)\s+(?:"[^"\n]*[/\\]oh-my-claudecode\.js"|'[^'\n]*[/\\]oh-my-claudecode\.js'|[^\s;|&`]*[/\\]oh-my-claudecode\.js)|(?:omc|oh-my-claudecode|oh-my-claudecode\.js|gjc))\s+/;
+const CANCEL_CLI_SUBCOMMAND_PATTERN = /^(?:state\s+(?:clear|read|write|list-active|get-status)|cancel)(?:\s|$)/;
+const ULTRAGOAL_CLI_SUBCOMMAND_PATTERN = /^ultragoal\s+(?:create(?:-goals)?|complete(?:-goals)?|next|start-next|status|checkpoint|record-review-blockers|add-goal|list-plans)(?:\s|$)/;
+
+function matchesOmcCliSubcommand(command, subcommandPattern) {
+  if (!isSingleShellCommand(command)) return false;
+  const commandArgs = command.trim().replace(OMC_CLI_PREFIX_PATTERN, '');
+  return commandArgs !== command.trim() && subcommandPattern.test(commandArgs);
+}
+
 function isCancelSkillBootstrapTool(toolName, toolInput) {
   const skillName = extractSkillName(toolInput);
   if (toolName === 'Skill' && skillName === 'cancel') return true;
@@ -1300,20 +1310,16 @@ function isCancelSkillBootstrapTool(toolName, toolInput) {
 
   if (toolName !== 'Bash') return false;
   const command = typeof toolInput.command === 'string' ? toolInput.command : '';
-  if (!isSingleShellCommand(command)) return false;
-  // Bare CLI names (PATH installs) or trusted plugin entrypoint via node/nodejs.
-  // Basename is constrained to oh-my-claudecode.js; arbitrary node scripts stay denied.
-  // isSingleShellCommand above rejects chaining/expansion so a recognized token cannot
-  // smuggle other commands past the guard (e.g. `... cancel && npm test`).
-  return /^(?:(?:node|nodejs)\s+(?:"[^"\n]*[/\\]oh-my-claudecode\.js"|'[^'\n]*[/\\]oh-my-claudecode\.js'|[^\s;|&`]*[/\\]oh-my-claudecode\.js)\s+|(?:omc|oh-my-claudecode|gjc)\s+)(?:state\s+(?:clear|read|write|list-active|get-status)|cancel)\b/.test(command.trim());
+  // PATH commands may use the plugin's .js filename; node/nodejs is restricted
+  // to that exact entrypoint basename so arbitrary scripts remain denied.
+  return matchesOmcCliSubcommand(command, CANCEL_CLI_SUBCOMMAND_PATTERN);
 }
 
 function isUltragoalBootstrapTool(toolName, toolInput) {
   if (toolName === 'Skill' && extractSkillName(toolInput) === 'ultragoal') return true;
   if (toolName !== 'Bash') return false;
   const command = typeof toolInput.command === 'string' ? toolInput.command : '';
-  if (!isSingleShellCommand(command)) return false;
-  return /^(?:omc|oh-my-claudecode)\s+ultragoal\s+(?:create(?:-goals)?|complete(?:-goals)?|next|start-next|status|checkpoint|record-review-blockers)\b/.test(command.trim());
+  return matchesOmcCliSubcommand(command, ULTRAGOAL_CLI_SUBCOMMAND_PATTERN);
 }
 
 function evaluateUltragoalPreToolEnforcement(stateDir, directory, sessionId, data) {
