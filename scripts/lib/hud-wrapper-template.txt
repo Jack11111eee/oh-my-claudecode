@@ -21,6 +21,13 @@ function uniquePaths(paths) {
   return [...new Set(paths.filter(Boolean).map((candidate) => resolve(candidate)))];
 }
 
+function shortHudLoadError(error) {
+  const message = typeof error?.message === "string" ? error.message : String(error);
+  const compactMessage = message.replace(/\s+/g, " ").trim();
+  if (!compactMessage) return "unknown error";
+  return compactMessage.length > 100 ? `${compactMessage.slice(0, 97)}...` : compactMessage;
+}
+
 function getGlobalNodeModuleRoots() {
   const roots = [];
   const addPrefixRoots = (prefix) => {
@@ -188,7 +195,9 @@ async function main() {
             } catch (error) {
               lastHudLoadError = error;
               lastHudLoadTarget = pluginPath;
-              // continue trying older built versions
+              // Older HUDs can misreport this installed version as an update.
+              console.log(`[OMC HUD] ${version} failed to load: ${shortHudLoadError(error)}`);
+              return;
             }
           }
         }

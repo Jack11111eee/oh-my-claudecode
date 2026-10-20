@@ -249,24 +249,29 @@ describe('HUD wrapper — OMC_PLUGIN_ROOT resolution', () => {
     expect(result.stdout).not.toContain('FROM_RC_2');
   });
 
-  it('case 8: cache step falls back to older built version when latest built version fails to import', () => {
+  it('case 8: reports a failed latest build instead of rendering an older stale HUD', () => {
     const s = staged!;
     const configDir = join(s.dir, 'isolated-config-cache-fallback');
     const cacheBase = join(configDir, 'plugins', 'cache', 'omc', 'oh-my-claudecode');
 
     const latestBrokenDir = join(cacheBase, '4.11.3', 'dist', 'hud');
     const olderWorkingDir = join(cacheBase, '4.11.2', 'dist', 'hud');
+    const latestFailureMessage = `Cannot find package 'zod'\n${'STACK_DETAIL '.repeat(20)}`;
+    const staleHudOutput = [
+      '[OMC#4.11.2L] -> 4.11.3 omc update',
+      '[!] omc 4.11.3 - paste: ! claude plugin update oh-my-claudecode@omc',
+    ].join('\n') + '\n';
     mkdirSync(latestBrokenDir, { recursive: true });
     mkdirSync(olderWorkingDir, { recursive: true });
 
     writeFileSync(
       join(latestBrokenDir, 'index.js'),
-      'throw new Error("BROKEN_4_11_3");\n',
+      `throw new Error(${JSON.stringify(latestFailureMessage)});\n`,
       'utf8',
     );
     writeFileSync(
       join(olderWorkingDir, 'index.js'),
-      'process.stdout.write("FROM_OLDER_WORKING_VERSION\\n");\n',
+      `process.stdout.write(${JSON.stringify(staleHudOutput)});\n`,
       'utf8',
     );
 
@@ -276,8 +281,15 @@ describe('HUD wrapper — OMC_PLUGIN_ROOT resolution', () => {
     }));
 
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain('FROM_OLDER_WORKING_VERSION');
-    expect(result.stderr ?? '').not.toMatch(/Error|throw/i);
+    const diagnosticLines = result.stdout.trimEnd().split(/\r?\n/);
+    expect(diagnosticLines).toHaveLength(1);
+    expect(diagnosticLines[0]).toContain(
+      "[OMC HUD] 4.11.3 failed to load: Cannot find package 'zod'",
+    );
+    expect(diagnosticLines[0].length).toBeLessThanOrEqual(150);
+    expect(result.stdout).not.toContain('omc update');
+    expect(result.stdout).not.toContain('paste:');
+    expect(result.stderr ?? '').toBe('');
   });
 
   it('case 5: symmetry — installer source and plugin-setup.mjs both produce identical wrapper text', async () => {
