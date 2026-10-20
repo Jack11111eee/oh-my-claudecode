@@ -280,6 +280,9 @@ describe('ultragoal persistence and Claude /goal enforcement', () => {
       `node ${join(cwd, 'evil.js')} ultragoal status`,
       'oh-my-claudecode.js ultragoal unknown',
       'oh-my-claudecode.js ultragoal status && npm test',
+      'oh-my-claudecode.js ultragoal status | cat',
+      'oh-my-claudecode.js ultragoal status $(echo bypass)',
+      'oh-my-claudecode.js ultragoal status `echo bypass`',
       `node ${pluginEntry} ultragoal checkpoint; echo bypass`,
       `node ${pluginEntry} ultragoalish status`,
     ];
