@@ -1,3 +1,13 @@
+## [Unreleased]
+
+### Fixed
+
+- Repair native Windows worker supervisor generation, console handle isolation, process cleanup, and provider exit status.
+- Compress the source-bound supervisor invocation to fit Windows command-line limits and reject unresolved native provider executables.
+- Submit tmux startup inboxes with Enter; shorten only overflowing Windows inbox notifications using the supplied state-root environment variable.
+- Recognize Codex folder-trust prompts without delivering task text or granting persistent trust.
+
+---
 # oh-my-claudecode v5.7.4: More reliable hooks, team workflows, HUD, and Jev planning
 
 ## Release Notes
@@ -37,7 +47,6 @@ Release with **1 new feature**, **4 bug fixes**, **1 performance improvement**, 
 - **9 PRs merged** | **1 new feature** | **4 bug fixes** | **1 performance improvement** | **3 test improvements**
 
 ---
-
 # oh-my-claudecode v5.7.3: Retire agent variant names, parallel consensus reviews
 
 ## Release Notes
