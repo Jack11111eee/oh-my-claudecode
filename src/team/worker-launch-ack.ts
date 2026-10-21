@@ -42,14 +42,9 @@ export function buildWindowsSupervisorSource(): string {
     'function Write-WorkerLaunchStage([string]$stage) { [Console]::Error.WriteLine("worker-launch-stage:" + $stage); [Console]::Error.Flush() }',
     'Write-WorkerLaunchStage "script-entry"',
     '[Console]::Out.WriteLine("' + WINDOWS_SUPERVISOR_INPUT_READY_MARKER + '"); [Console]::Out.Flush()',
-    'Add-Type @"',
-    'public static class WorkerLaunchInput { private static System.IO.StreamReader input; public static void Initialize() { input = new System.IO.StreamReader(System.Console.OpenStandardInput(), new System.Text.UTF8Encoding(false), true); } public static System.Threading.Tasks.Task<string> ReadLineAsync() { return System.Threading.Tasks.Task.Run(() => input.ReadLine()); } }',
-    '"@',
-    'Write-WorkerLaunchStage "input-reader-defined"',
-    '[WorkerLaunchInput]::Initialize()',
-    'Write-WorkerLaunchStage "input-reader-initialized"',
     'Write-WorkerLaunchStage "input-payload-read-started"',
-    '$payloadLine = [WorkerLaunchInput]::ReadLineAsync().GetAwaiter().GetResult()',
+    '$bootstrapReader = [System.IO.StreamReader]::new([Console]::OpenStandardInput(), [System.Text.UTF8Encoding]::new($false), $true)',
+    '$payloadLine = $bootstrapReader.ReadLine()',
     'Write-WorkerLaunchStage "input-payload-read"',
     'if ($null -eq $payloadLine) { throw "worker_launch_authority_lost" }',
     '$payload = $payloadLine | ConvertFrom-Json',
@@ -78,8 +73,10 @@ export function buildWindowsSupervisorSource(): string {
   $launcherPath = [System.IO.Path]::Combine($TempRoot, $launcherName)
   $argvJson = ConvertTo-Json -InputObject @($ProviderArgv) -Compress
   $argvBase64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($argvJson))
+  $commandShellBase64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($cmdPath))
   $scriptTemplate = @'
 $ErrorActionPreference = "Stop"
+$env:ComSpec = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String("__COMSPEC_BASE64__"))
 $providerArgv = @([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String("__ARGV_BASE64__")) | ConvertFrom-Json)
 $providerPath = [string]$providerArgv[0]
 $providerArguments = [string[]]@($providerArgv | Select-Object -Skip 1)
@@ -97,7 +94,7 @@ try {
 }
 exit $exitCode
 '@
-  $script = $scriptTemplate.Replace('__ARGV_BASE64__', $argvBase64)
+  $script = $scriptTemplate.Replace('__COMSPEC_BASE64__', $commandShellBase64).Replace('__ARGV_BASE64__', $argvBase64)
   $launcherFile = [System.IO.File]::Open($launcherPath, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
   try {
     $bytes = [System.Text.UTF8Encoding]::new($false).GetBytes($script)

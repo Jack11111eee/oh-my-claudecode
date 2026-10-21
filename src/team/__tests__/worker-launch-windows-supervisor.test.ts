@@ -13,22 +13,20 @@ describe('generated Windows worker supervisor', () => {
     expect(source).toContain(String.raw`if (c == '\\')`);
     expect(source).toContain('[uint32]::MaxValue');
     expect(source).not.toContain('[uint32]0xffffffff');
-    expect(source).toContain('new System.IO.StreamReader(System.Console.OpenStandardInput(), new System.Text.UTF8Encoding(false), true)');
+    expect(source).toContain('[System.IO.StreamReader]::new([Console]::OpenStandardInput(), [System.Text.UTF8Encoding]::new($false), $true)');
     expect(source).toContain('[O]::ReadLineAsync()');
-    expect(source).toContain('Task.Run(() => input.ReadLine())');
     expect(source).not.toContain('System.Console.SetIn(');
+    expect(source).not.toContain('WorkerLaunchInput');
     const inputReadyMarker = source.indexOf('[Console]::Out.WriteLine("worker-launch-input-ready-v1"); [Console]::Out.Flush()');
-    const inputHelper = source.indexOf('Add-Type @"');
-    const initializeInput = source.indexOf('[WorkerLaunchInput]::Initialize()');
-    const readBootstrapPayload = source.indexOf('$payloadLine = [WorkerLaunchInput]::ReadLineAsync().GetAwaiter().GetResult()');
+    const initializeInput = source.indexOf('$bootstrapReader = [System.IO.StreamReader]::new(');
+    const readBootstrapPayload = source.indexOf('$payloadLine = $bootstrapReader.ReadLine()');
     expect(inputReadyMarker).toBeGreaterThan(source.indexOf('$ErrorActionPreference = "Stop"'));
-    expect(inputReadyMarker).toBeLessThan(inputHelper);
-    expect(inputHelper).toBeLessThan(initializeInput);
-    expect(initializeInput).toBeGreaterThan(-1);
+    expect(initializeInput).toBeGreaterThan(inputReadyMarker);
     expect(readBootstrapPayload).toBeGreaterThan(-1);
     expect(initializeInput).toBeLessThan(readBootstrapPayload);
     expect(readBootstrapPayload).toBeLessThan(source.indexOf('$readTask = [O]::ReadLineAsync()'));
-    expect(source).toContain('$payloadLine = [WorkerLaunchInput]::ReadLineAsync().GetAwaiter().GetResult()');
+    expect(source).toContain('$payloadLine = $bootstrapReader.ReadLine()');
+    expect(readBootstrapPayload).toBeLessThan(source.indexOf('Add-Type @"'));
     expect(source).not.toContain('[System.Threading.Tasks.Task]::Run([System.Func[string]]');
     expect(source).toContain('CreateFileW("CONIN$",');
     expect(source).toContain('CreateFileW("CONOUT$",');
@@ -59,7 +57,7 @@ describe('generated Windows worker supervisor', () => {
   });
 
   it.runIf(process.platform === 'win32')('compiles in PowerShell 5.1 and launches a native batch provider through its generated launcher', () => {
-    // Parse the actual generated script, then execute its Add-Type commands.
+    // Parse the actual generated script, then execute its supervisor Add-Type command.
     // This catches script delimiters and layered C# escaping, then exercises
     // the structured PowerShell launcher against an isolated provider shim.
     const harness = String.raw`
@@ -70,7 +68,7 @@ $tokens = $null; $errors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseInput($source, [ref]$tokens, [ref]$errors)
 if ($errors.Count -ne 0) { $diagnostics = $errors | ForEach-Object { "line $($_.Extent.StartLineNumber):$($_.Extent.StartColumnNumber) $($_.Message)" }; throw ($diagnostics -join '; ') }
 $commands = @($ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq 'Add-Type' }, $true))
-if ($commands.Count -ne 2) { throw 'Expected bootstrap input and supervisor Add-Type commands' }
+if ($commands.Count -ne 1) { throw 'Expected only the supervisor Add-Type command' }
 foreach ($command in $commands) { Invoke-Expression $command.Extent.Text }
 $helpers = @($ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'New-ProviderLaunchInvocation' }, $true))
 if ($helpers.Count -ne 1) { throw 'Expected batch-provider launcher helper' }
@@ -98,7 +96,11 @@ try {
   $expectedCommandLine = [O]::BuildCommandLine([string[]]@($launch.application_path, '-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $launcherPath))
   if ($launch.command_line -cne $expectedCommandLine) { throw "Unexpected PowerShell launcher command line: $($launch.command_line)" }
   $launcher = [IO.File]::ReadAllText($launcherPath)
-  $argvMatch = [regex]::Match($launcher, 'FromBase64String\("([A-Za-z0-9+/=]+)"\)')
+  $comspecMatch = [regex]::Match($launcher, '\$env:ComSpec = \[Text.Encoding\]::UTF8.GetString\(\[Convert\]::FromBase64String\("([A-Za-z0-9+/=]+)"\)\)')
+  if (-not $comspecMatch.Success) { throw 'Generated launcher lost its explicit command-shell path' }
+  $expectedComspec = Join-Path $env:SystemRoot 'System32\cmd.exe'
+  if ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($comspecMatch.Groups[1].Value)) -cne $expectedComspec) { throw 'Generated launcher changed the validated command-shell path' }
+  $argvMatch = [regex]::Match($launcher, '\$providerArgv = @\(\[Text.Encoding\]::UTF8.GetString\(\[Convert\]::FromBase64String\("([A-Za-z0-9+/=]+)"\)\) \| ConvertFrom-Json\)')
   if (-not $argvMatch.Success) { throw 'Generated launcher lost its encoded argv payload' }
   $decodedArgv = [string[]]@([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($argvMatch.Groups[1].Value)) | ConvertFrom-Json)
   if ($decodedArgv.Count -ne $providerArgv.Count) { throw 'Structured launcher changed provider argv count' }
@@ -119,6 +121,7 @@ try {
   $startInfo.Arguments = $launch.command_line.Substring($prefix.Length + 1)
   $startInfo.WorkingDirectory = $helperRoot
   $startInfo.UseShellExecute = $false
+  $null = $startInfo.EnvironmentVariables.Remove('ComSpec')
   $process = [System.Diagnostics.Process]::Start($startInfo)
   if (-not $process.WaitForExit(15000)) { $process.Kill(); throw 'Generated PowerShell provider launcher timed out' }
   if ($process.ExitCode -ne 37) { throw "Expected provider exit code 37, got $($process.ExitCode); generated command line: $($launch.command_line)" }
