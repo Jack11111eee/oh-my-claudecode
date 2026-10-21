@@ -17,14 +17,15 @@ const root = (() => {
 })();
 
 describe('prompt projection fixtures', () => {
-  it('golden managed block matches composed projection from canonical', () => {
+  it('golden managed block retains version-independent framing', () => {
     const golden = readFileSync(join(root, 'tests/fixtures/prompt-projection/claude-managed-block.golden'), 'utf8');
-    // golden was generated as deterministic projection from docs canonical; verify via composer module
-    // Import dynamically to avoid circular, but we can just check golden contains markers and version
+    // The golden freezes projection framing; the release version belongs to the canonical output.
     const pkgVer = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version as string;
     expect(golden).toContain('<!-- OMC:START -->');
-    expect(golden).toContain(`<!-- OMC:VERSION:${pkgVer} -->`);
+    expect(golden).toMatch(/<!-- OMC:VERSION:\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)? -->/);
     expect(golden).toContain('<!-- OMC:END -->');
+    const canonical = readFileSync(join(root, 'docs/CLAUDE.md'), 'utf8');
+    expect(canonical).toContain(`<!-- OMC:VERSION:${pkgVer} -->`);
     const docsBody = readFileSync(join(root, 'tests/fixtures/prompt-projection/claude-body.normalized'), 'utf8');
     expect(golden).toContain(docsBody.trim().split('\n')[0].slice(0,20));
   });
