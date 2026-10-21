@@ -38,7 +38,10 @@ const WINDOWS_SUPERVISOR_PROTOCOL = 'worker-launch-windows-supervisor-v1';
 export function buildWindowsSupervisorSource(): string {
   return [
     '$ErrorActionPreference = "Stop"',
-    '$payloadLine = [System.Threading.Tasks.Task]::Run([System.Func[string]] { [Console]::In.ReadLine() }).GetAwaiter().GetResult()',
+    'Add-Type @"',
+    'public static class WorkerLaunchInput { public static System.Threading.Tasks.Task<string> ReadLineAsync() { return System.Threading.Tasks.Task.Run(() => System.Console.In.ReadLine()); } }',
+    '"@',
+    '$payloadLine = [WorkerLaunchInput]::ReadLineAsync().GetAwaiter().GetResult()',
     'if ($null -eq $payloadLine) { throw "worker_launch_authority_lost" }',
     '$payload = $payloadLine | ConvertFrom-Json',
     '$json = $payload.canonical_json',
@@ -47,7 +50,7 @@ export function buildWindowsSupervisorSource(): string {
     '$authority = $json | ConvertFrom-Json; if ($authority.provider_argv.Count -ne $payload.provider_argv.Count) { throw "worker_launch_authority_argv_mismatch" }; for ($i = 0; $i -lt $authority.provider_argv.Count; $i++) { if ([string]$authority.provider_argv[$i] -cne [string]$payload.provider_argv[$i]) { throw "worker_launch_authority_argv_mismatch" } }',
     String.raw`function Quote-ProviderCmdArgument([string]$value) {
   if ($value.IndexOf([char]0) -ge 0 -or $value.IndexOf([char]13) -ge 0 -or $value.IndexOf([char]10) -ge 0) { throw "worker_launch_provider_argv_invalid" }
-  return '"' + $value.Replace('%', '%%').Replace('"', '""') + '"'
+  return '"' + $value.Replace('%', '%%%%').Replace('"', '""') + '"'
 }
 function New-ProviderLaunchInvocation {
   param([string[]]$ProviderArgv, [string]$SystemRoot, [string]$TempRoot, [string]$TempEnvironmentVariable)
@@ -64,7 +67,7 @@ function New-ProviderLaunchInvocation {
   $quotedArgv = @($ProviderArgv | ForEach-Object { Quote-ProviderCmdArgument ([string]$_) }) -join ' '
   $lineEnding = [string][char]13 + [char]10
   $codePageCapture = 'for /f "tokens=2 delims=:" %%c in (' + [char]39 + 'chcp' + [char]39 + ') do set "_OMC_OLD_CODEPAGE=%%c"'
-  $script = '@echo off' + $lineEnding + $codePageCapture + $lineEnding + 'chcp 65001 >nul' + $lineEnding + $quotedArgv + $lineEnding + 'set "_OMC_PROVIDER_EXIT=%ERRORLEVEL%"' + $lineEnding + 'if defined _OMC_OLD_CODEPAGE chcp %_OMC_OLD_CODEPAGE% >nul' + $lineEnding + 'exit /b %_OMC_PROVIDER_EXIT%' + $lineEnding
+  $script = '@echo off' + $lineEnding + $codePageCapture + $lineEnding + 'chcp 65001 >nul' + $lineEnding + 'call ' + $quotedArgv + $lineEnding + 'set "_OMC_PROVIDER_EXIT=%ERRORLEVEL%"' + $lineEnding + 'if defined _OMC_OLD_CODEPAGE chcp %_OMC_OLD_CODEPAGE% >nul' + $lineEnding + 'exit /b %_OMC_PROVIDER_EXIT%' + $lineEnding
   $batchFile = [System.IO.File]::Open($batchPath, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
   try {
     $bytes = [System.Text.UTF8Encoding]::new($false).GetBytes($script)
@@ -2250,6 +2253,7 @@ export async function runWorkerLaunchBootstrap(value: unknown): Promise<WorkerLa
       let resolveCompletion!: (result: WorkerLaunchBootstrapResult) => void;
       let resolveWindowsReady!: (ready: boolean) => void;
       let resolveWindowsTerminal!: (verified: boolean) => void;
+      let windowsTerminationProofWrite: Promise<boolean> | null = null;
       const windowsReady = new Promise<boolean>(resolve => { resolveWindowsReady = resolve; });
       const windowsTerminal = new Promise<boolean>(resolve => { resolveWindowsTerminal = resolve; });
       if (process.platform === 'win32') {
@@ -2326,15 +2330,15 @@ export async function runWorkerLaunchBootstrap(value: unknown): Promise<WorkerLa
               && Number(message.exit_code) <= 0xffffffff
               && message.cleanup_verified === true) {
               supervisedExitCode = Number(message.exit_code);
-              void writeExclusiveAtomic(`${spec.started_path}.termination-complete`, {
+              windowsTerminationProofWrite ??= writeExclusiveAtomic(`${spec.started_path}.termination-complete`, {
                 ...identityOf(spec), kind: 'worker_launch_termination_complete', cleanup_verified: true,
                 pid: providerPid, process_start_identity: providerStartIdentity,
                 authority_digest: spec.authority_digest, containment_nonce: spec.containment_nonce,
                 outcome: message.outcome,
                 ...(Number.isSafeInteger(message.exit_code) ? { exit_code: message.exit_code } : {}),
                 written_at: new Date().toISOString(),
-              }).catch(() => undefined);
-              resolveWindowsTerminal(true);
+              }).then(() => true, () => false);
+              void windowsTerminationProofWrite.then(resolveWindowsTerminal);
             }
           }
         });
@@ -2353,7 +2357,7 @@ export async function runWorkerLaunchBootstrap(value: unknown): Promise<WorkerLa
           if (supervisorTimer) clearInterval(supervisorTimer);
           if (process.platform === 'win32') {
             resolveWindowsReady(false);
-            resolveWindowsTerminal(false);
+            if (!windowsTerminationProofWrite) resolveWindowsTerminal(false);
           }
           const effectiveExitCode = supervisedExitCode ?? exitCode;
           const effectiveSignal = supervisedExitCode === null ? signal : null;
@@ -2387,6 +2391,9 @@ export async function runWorkerLaunchBootstrap(value: unknown): Promise<WorkerLa
           const gateTransportFailed = invocation.providerGateFd !== undefined
             && providerGateError !== null;
           const gateCleanupRequired = gateAborted || gateReleaseFailed || gateTransportFailed;
+          const windowsTerminationProofWritten = process.platform === 'win32'
+            ? windowsTerminationProofWrite === null || await windowsTerminationProofWrite
+            : false;
           const groupAbsent = launchGroup !== null
             && await waitForProcessGroupAbsence(launchGroup.processGroupId, Date.now() + 2_000);
           // Windows cleanup remains bound to the supervisor/Job completion
@@ -2394,7 +2401,8 @@ export async function runWorkerLaunchBootstrap(value: unknown): Promise<WorkerLa
           // creation-bound process group being absent; an aborted gate with
           // no captured group is safe only when no release was attempted.
           const cleanupVerified = process.platform === 'win32'
-            ? await awaitExternalTerminationCompletion(spec) || await readWorkerLaunchCleanupProof(spec)
+            ? windowsTerminationProofWritten
+              && (await awaitExternalTerminationCompletion(spec) || await readWorkerLaunchCleanupProof(spec))
             : (launchGroup !== null && groupAbsent) || (gateAborted && launchGroup === null);
           await writeTerminal({
             ...identityOf(spec), kind: 'worker_launch_provider_terminal',
