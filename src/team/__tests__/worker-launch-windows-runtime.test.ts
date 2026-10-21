@@ -95,7 +95,6 @@ async function run(mode: 'exit' | 'terminate' | 'eof'): Promise<void> {
     command('new-session', '-d', '-s', 'runtime', '--', process.execPath, fixture, 'controller', root, mode);
     started = true;
     const initial = await waitFor(() => json<State>(join(root, 'controller.json')), 'controller started');
-    capture(initial.supervisorPid);
     capture(initial.controllerPid);
     let readyState: State;
     try {
@@ -123,6 +122,7 @@ async function run(mode: 'exit' | 'terminate' | 'eof'): Promise<void> {
       }) : 'controller state unavailable';
       throw new Error(`${error instanceof Error ? error.message : String(error)}; ${diagnostic}`);
     }
+    capture(initial.supervisorPid);
     const ready = readyState.frames.find(frame => frame.kind === 'ready')!;
     expect(ready).toMatchObject({ protocol, attempt_id: identity.attempt_id, instance_id: identity.instance_id, authority_digest: spec.authority_digest, containment_nonce: spec.containment_nonce });
     expect(capture(ready.pid)).toBe(ready.process_start_identity);
