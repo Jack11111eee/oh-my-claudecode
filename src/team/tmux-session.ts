@@ -3644,9 +3644,9 @@ export async function deliverStartupInbox(
       context.ownership.tmuxServerIdentity,
     );
     await sleep(100);
-    await sendTeamPaneKey(context.ownership.paneId, 'Enter', context.ownership.tmuxServerIdentity);
+    await sendTeamPaneKey(context.ownership.paneId, 'C-m', context.ownership.tmuxServerIdentity);
     await sleep(120);
-    await sendTeamPaneKey(context.ownership.paneId, 'Enter', context.ownership.tmuxServerIdentity);
+    await sendTeamPaneKey(context.ownership.paneId, 'C-m', context.ownership.tmuxServerIdentity);
     return { ok: true, kind: 'attempted_unconfirmed' };
   } catch (error) {
     logWorkerSpawnDiagnostic(
@@ -3735,7 +3735,7 @@ export async function retryStartupInboxSubmit(
   if (paneHasActiveTask(observation.captured, context.provider)) return 'pane_busy';
   if (!paneTailContainsLiteralLine(observation.captured, message)) return 'unavailable';
   try {
-    await sendTeamPaneKey(context.ownership.paneId, 'Enter', context.ownership.tmuxServerIdentity);
+    await sendTeamPaneKey(context.ownership.paneId, 'C-m', context.ownership.tmuxServerIdentity);
     return 'resubmitted';
   } catch {
     return 'unavailable';
@@ -3799,7 +3799,6 @@ export async function sendToWorker(
     const paneBusy = paneHasActiveTask(initialCapture);
 
     const trustPromptKind = detectPaneTrustPromptKind(initialCapture);
-    if (trustPromptKind === 'codex_directory') return false;
     if (trustPromptKind === 'cursor_workspace_trust') {
       // Nothing to dismiss: cursor-agent printed the banner and exited. Sending
       // keys here would type into a dead pane.

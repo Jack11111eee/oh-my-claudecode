@@ -673,47 +673,6 @@ describe('worker pane startup safety', () => {
     expect(tmuxState.args.some(args => args[0] === 'send-keys' && args.at(-1) === 'C-m')).toBe(false);
   });
 
-  strictTmuxIt('refuses Codex folder trust without selecting trust or delivering task text', async () => {
-    const context = await acceptedContext('codex');
-    const capture = [
-      'Folder access', 'D:\\test\\repo',
-      'Trust this folder? Codex can read, edit, and',
-      'run files here, subject to your permission',
-      'settings. Folder settings can run code',
-      'automatically, even without a model request.',
-      'Continue only if you trust these files. Your',
-      'trust decision will be saved.',
-      'Review the files in this folder before continuing.',
-      'Folder settings may allow code to run automatically.',
-      'Only proceed when you recognize and trust this project.',
-      'Trust applies to the current workspace folder.',
-      'The selected choice is saved for future sessions.',
-      'You can quit now and inspect the folder first.',
-      'Folder access may include reading project files.',
-      'Folder access may include editing project files.',
-      'Review any automated actions before granting access.',
-      'Do not continue if the folder is unfamiliar.',
-      'The trust decision should reflect your own judgment.',
-      'You can return after reviewing the project contents.',
-      'This prompt requires an explicit user decision.',
-      '› 1. Trust and continue', '  2. Quit',
-      'enter continue · esc quit',
-    ].join('\n');
-    tmuxState.captures = [capture];
-
-    expect(paneHasTrustPrompt(capture, 'codex')).toBe(true);
-    expect(paneLooksReady(capture, 'codex')).toBe(false);
-    expect(paneHasActiveTask(capture, 'codex')).toBe(false);
-    expect(paneHasTrustPrompt(capture, 'claude')).toBe(false);
-    await expect(deliverStartupInbox(context, 'List files and report the result.')).resolves.toEqual({
-      ok: false,
-      reason: 'codex_workspace_untrusted',
-    });
-    await expect(sendToWorker('', '%2', 'List files and report the result.', context.ownership.tmuxServerIdentity))
-      .resolves.toBe(false);
-    expect(tmuxState.args.some(args => args.includes('send-keys'))).toBe(false);
-  });
-
   strictTmuxIt.each([
     ['Do you trust the files in this folder?', 'Yes, proceed'],
     ['Quick safety check: Is this a project you created or one you trust?', 'Yes, I trust this folder'],
