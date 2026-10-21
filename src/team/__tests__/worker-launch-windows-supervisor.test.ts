@@ -38,7 +38,7 @@ describe('generated Windows worker supervisor', () => {
     expect(source).toContain('New-ProviderLaunchInvocation');
     expect(source).toContain('ConvertTo-Json -InputObject @{ argv = @($ProviderArgv) } -Compress');
     expect(source).toContain('$argvEnvelope = ConvertFrom-Json -InputObject ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String("__ARGV_BASE64__")))');
-    expect(source).toContain('$providerArgv = [string[]]$argvEnvelope.argv');
+    expect(source).toContain('$providerArgv = @($argvEnvelope.argv)');
     expect(source).toContain('$providerArguments = New-Object string[] ($providerArgv.Length - 1)');
     expect(source).toContain('[Array]::Copy($providerArgv, 1, $providerArguments, 0, $providerArguments.Length)');
     expect(source).not.toContain('ConvertTo-Json -InputObject @($ProviderArgv) -Compress');

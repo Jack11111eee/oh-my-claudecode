@@ -110,7 +110,7 @@ export function buildWindowsSupervisorSource(): string {
 $ErrorActionPreference = "Stop"
 $env:ComSpec = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String("__COMSPEC_BASE64__"))
 $argvEnvelope = ConvertFrom-Json -InputObject ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String("__ARGV_BASE64__")))
-$providerArgv = [string[]]$argvEnvelope.argv
+$providerArgv = @($argvEnvelope.argv)
 $providerPath = [string]$providerArgv[0]
 $providerArguments = New-Object string[] ($providerArgv.Length - 1)
 [Array]::Copy($providerArgv, 1, $providerArguments, 0, $providerArguments.Length)
