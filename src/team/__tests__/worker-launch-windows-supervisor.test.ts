@@ -30,8 +30,8 @@ describe('generated Windows worker supervisor', () => {
     expect(source).toContain('true, 0x00000004 | 0x00000400 | 0x00080000');
     expect(source).toContain('exit_code=$exitCode');
     expect(source).toContain('New-ProviderLaunchInvocation');
-    expect(source).toContain("Replace('%', '%%%%')");
-    expect(source).toContain("Replace('^', '^^^^')");
+    expect(source).toContain("Replace('%', '%%')");
+    expect(source).not.toContain("Replace('^', '^^^^");
     expect(source).toContain('chcp 65001 >nul');
     expect(source).toContain(String.raw` /s /c ""`);
 
@@ -73,14 +73,14 @@ try {
   if ($launch.command_line -notmatch ' /s /c ""%TEMP%\\omc-worker-[0-9a-f]+\.cmd""$') { throw "Expected cmd.exe /s /c quoting without CRT-escaped quotes; command line: $($launch.command_line)" }
   if ($launch.command_line.Contains('\\"')) { throw 'Expected cmd.exe command tail to avoid CRT quote escaping' }
   $batch = [IO.File]::ReadAllText($batchPath)
-  foreach ($literal in @('chcp 65001 >nul', '100%%%% ready', '%%%%USERPROFILE%%%%', 'bang!', 'caret^^^^', 'say ""hello"" & continue', 'two words', 'Grüße-λ-漢字')) {
+  foreach ($literal in @('chcp 65001 >nul', '100%% ready', '%USERPROFILE%', 'bang!', 'caret^', 'say ""hello"" & continue', 'two words', 'Grüße-λ-漢字')) {
     if (-not $batch.Contains($literal)) { throw "Batch wrapper lost literal argument: $literal; batch content: $batch" }
   }
   $cleanupAnchor = 'if defined _OMC_OLD_CODEPAGE chcp %_OMC_OLD_CODEPAGE% >nul'
   if (-not $batch.Contains($cleanupAnchor)) { throw 'Generated wrapper lost code-page restoration line' }
   $batch = $batch.Replace($cleanupAnchor, $cleanupAnchor + [char]13 + [char]10 + 'echo cleanup> "%TEMP%\cleanup.marker"')
   [IO.File]::WriteAllText($batchPath, $batch, [Text.UTF8Encoding]::new($false))
-  $expectedProviderInvocation = 'call ' + (@($providerArgv | ForEach-Object { Quote-ProviderCmdArgument ([string]$_) }) -join ' ')
+  $expectedProviderInvocation = @($providerArgv | ForEach-Object { Quote-ProviderCmdArgument ([string]$_) }) -join ' '
   if (-not $batch.Contains($expectedProviderInvocation)) { throw "Batch wrapper lost provider invocation line; expected: $expectedProviderInvocation; batch content: $batch" }
   $prefix = [O]::BuildCommandLine([string[]]@($launch.application_path))
   if (-not $launch.command_line.StartsWith($prefix + ' ', [StringComparison]::Ordinal)) { throw 'Expected application path prefix in command line' }

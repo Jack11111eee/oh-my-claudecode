@@ -51,7 +51,7 @@ export function buildWindowsSupervisorSource(): string {
     '$authority = $json | ConvertFrom-Json; if ($authority.provider_argv.Count -ne $payload.provider_argv.Count) { throw "worker_launch_authority_argv_mismatch" }; for ($i = 0; $i -lt $authority.provider_argv.Count; $i++) { if ([string]$authority.provider_argv[$i] -cne [string]$payload.provider_argv[$i]) { throw "worker_launch_authority_argv_mismatch" } }',
     String.raw`function Quote-ProviderCmdArgument([string]$value) {
   if ($value.IndexOf([char]0) -ge 0 -or $value.IndexOf([char]13) -ge 0 -or $value.IndexOf([char]10) -ge 0) { throw "worker_launch_provider_argv_invalid" }
-  return '"' + $value.Replace('%', '%%%%').Replace('"', '""').Replace('^', '^^^^') + '"'
+  return '"' + $value.Replace('%', '%%').Replace('"', '""') + '"'
 }
 function New-ProviderLaunchInvocation {
   param([string[]]$ProviderArgv, [string]$SystemRoot, [string]$TempRoot, [string]$TempEnvironmentVariable)
@@ -68,7 +68,7 @@ function New-ProviderLaunchInvocation {
   $quotedArgv = @($ProviderArgv | ForEach-Object { Quote-ProviderCmdArgument ([string]$_) }) -join ' '
   $lineEnding = [string][char]13 + [char]10
   $codePageCapture = 'for /f "tokens=2 delims=:" %%c in (' + [char]39 + 'chcp' + [char]39 + ') do set "_OMC_OLD_CODEPAGE=%%c"'
-  $script = '@echo off' + $lineEnding + $codePageCapture + $lineEnding + 'chcp 65001 >nul' + $lineEnding + 'call ' + $quotedArgv + $lineEnding + 'set "_OMC_PROVIDER_EXIT=%ERRORLEVEL%"' + $lineEnding + 'if defined _OMC_OLD_CODEPAGE chcp %_OMC_OLD_CODEPAGE% >nul' + $lineEnding + 'exit /b %_OMC_PROVIDER_EXIT%' + $lineEnding
+  $script = '@echo off' + $lineEnding + $codePageCapture + $lineEnding + 'chcp 65001 >nul' + $lineEnding + $quotedArgv + $lineEnding + 'set "_OMC_PROVIDER_EXIT=%ERRORLEVEL%"' + $lineEnding + 'if defined _OMC_OLD_CODEPAGE chcp %_OMC_OLD_CODEPAGE% >nul' + $lineEnding + 'exit /b %_OMC_PROVIDER_EXIT%' + $lineEnding
   $batchFile = [System.IO.File]::Open($batchPath, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
   try {
     $bytes = [System.Text.UTF8Encoding]::new($false).GetBytes($script)
