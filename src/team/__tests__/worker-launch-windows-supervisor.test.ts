@@ -26,8 +26,7 @@ describe('generated Windows worker supervisor', () => {
     expect(source).toContain('New-ProviderLaunchInvocation');
     expect(source).toContain("Replace('%', '%%')");
     expect(source).toContain('chcp 65001 >nul');
-    expect(source).toContain(String.raw` /s /c "call "`);
-    expect(source).toContain('start "" /b /wait');
+    expect(source).toContain(String.raw` /s /c ""`);
   });
 
   it.runIf(process.platform === 'win32')('compiles in PowerShell 5.1 and launches a native batch provider through its generated wrapper', () => {
@@ -63,12 +62,13 @@ try {
   $batchPath = $launch.batch_path
   if ($launch.provider_argv.Count -ne 8) { throw 'Expected the validated provider argv to remain intact' }
   if ($launch.application_path -ne (Join-Path $env:SystemRoot 'System32\cmd.exe')) { throw 'Expected absolute System32 cmd.exe' }
-  if ($launch.command_line -notmatch ' /s /c "call "%TEMP%\\omc-worker-[0-9a-f]+\.cmd""$') { throw "Expected cmd.exe /s /c command to CALL one quoted %TEMP% wrapper path: $($launch.command_line)" }
+  if ($launch.command_line -notmatch ' /s /c ""%TEMP%\\omc-worker-[0-9a-f]+\.cmd""$') { throw "Expected cmd.exe /s /c quoting without CRT-escaped quotes; command line: $($launch.command_line)" }
   if ($launch.command_line.Contains('\\"')) { throw 'Expected cmd.exe command tail to avoid CRT quote escaping' }
   $batch = [IO.File]::ReadAllText($batchPath)
-  foreach ($literal in @('chcp 65001 >nul', 'start "" /b /wait', '100%% ready', '%%USERPROFILE%%', 'bang!', 'caret^', 'say ""hello"" & continue', 'two words', 'Grüße-λ-漢字')) {
-    if (-not $batch.Contains($literal)) { throw "Batch wrapper lost literal argument: $literal" }
+  foreach ($literal in @('chcp 65001 >nul', '100%% ready', '%%USERPROFILE%%', 'bang!', 'caret^', 'say ""hello"" & continue', 'two words', 'Grüße-λ-漢字')) {
+    if (-not $batch.Contains($literal)) { throw "Batch wrapper lost literal argument: $literal; batch content: $batch" }
   }
+  if (-not ($batch -match [regex]::Escape($quotedArgv))) { throw "Batch wrapper lost provider invocation line; batch content: $batch" }
   $prefix = [O]::BuildCommandLine([string[]]@($launch.application_path))
   if (-not $launch.command_line.StartsWith($prefix + ' ', [StringComparison]::Ordinal)) { throw 'Expected application path prefix in command line' }
   $startInfo = New-Object System.Diagnostics.ProcessStartInfo
@@ -78,7 +78,7 @@ try {
   $startInfo.UseShellExecute = $false
   $process = [System.Diagnostics.Process]::Start($startInfo)
   if (-not $process.WaitForExit(15000)) { $process.Kill(); throw 'Generated cmd.exe provider wrapper timed out' }
-  if ($process.ExitCode -ne 37) { throw "Expected provider exit code 37, got $($process.ExitCode); generated command line: $($launch.command_line); expanded command line: $($launch.command_line.Replace('%TEMP%', $helperRoot))" }
+  if ($process.ExitCode -ne 37) { throw "Expected provider exit code 37, got $($process.ExitCode); generated command line: $($launch.command_line); expanded command line: $($launch.command_line.Replace('%TEMP%', $helperRoot)); batch content: $batch" }
   $actualArgv = [IO.File]::ReadAllText((Join-Path $helperRoot 'argv.json')) | ConvertFrom-Json
   if ((ConvertTo-Json -InputObject $actualArgv -Compress) -cne (ConvertTo-Json -InputObject $payloadArgv -Compress)) { throw 'Generated wrapper changed provider argv' }
   $exePath = Join-Path $env:SystemRoot 'System32\cmd.exe'

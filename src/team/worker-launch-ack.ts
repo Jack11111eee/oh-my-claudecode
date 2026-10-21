@@ -62,7 +62,7 @@ function New-ProviderLaunchInvocation {
   $quotedArgv = @($ProviderArgv | ForEach-Object { Quote-ProviderCmdArgument ([string]$_) }) -join ' '
   $lineEnding = [string][char]13 + [char]10
   $codePageCapture = 'for /f "tokens=2 delims=:" %%c in (' + [char]39 + 'chcp' + [char]39 + ') do set "_OMC_OLD_CODEPAGE=%%c"'
-  $script = '@echo off' + $lineEnding + $codePageCapture + $lineEnding + 'chcp 65001 >nul' + $lineEnding + 'start "" /b /wait ' + $quotedArgv + $lineEnding + 'set "_OMC_PROVIDER_EXIT=%ERRORLEVEL%"' + $lineEnding + 'if defined _OMC_OLD_CODEPAGE chcp %_OMC_OLD_CODEPAGE% >nul' + $lineEnding + 'exit /b %_OMC_PROVIDER_EXIT%' + $lineEnding
+  $script = '@echo off' + $lineEnding + $codePageCapture + $lineEnding + 'chcp 65001 >nul' + $lineEnding + $quotedArgv + $lineEnding + 'set "_OMC_PROVIDER_EXIT=%ERRORLEVEL%"' + $lineEnding + 'if defined _OMC_OLD_CODEPAGE chcp %_OMC_OLD_CODEPAGE% >nul' + $lineEnding + 'exit /b %_OMC_PROVIDER_EXIT%' + $lineEnding
   $batchFile = [System.IO.File]::Open($batchPath, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
   try {
     $bytes = [System.Text.UTF8Encoding]::new($false).GetBytes($script)
@@ -77,9 +77,7 @@ function New-ProviderLaunchInvocation {
   }
   $batchCommand = '%' + $TempEnvironmentVariable + '%\' + $batchName
   $commandPrefix = [O]::BuildCommandLine([string[]]@($cmdPath))
-  # /s strips the command string's outer quotes; CALL then receives the
-  # wrapper path as one quoted argument after the TEMP/TMP expansion.
-  $commandLine = $commandPrefix + ' /d /v:off /s /c "call "' + $batchCommand + '""'
+  $commandLine = $commandPrefix + ' /d /v:off /s /c ""' + $batchCommand + '""'
   return @{ provider_argv = $ProviderArgv; application_path = $cmdPath; command_line = $commandLine; batch_path = $batchPath }
 }`,
     'Add-Type @"',
