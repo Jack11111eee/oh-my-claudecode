@@ -98,6 +98,10 @@ $providerArgv = [string[]]$argvEnvelope.argv
 $providerPath = [string]$providerArgv[0]
 $providerArguments = New-Object string[] ($providerArgv.Length - 1)
 [Array]::Copy($providerArgv, 1, $providerArguments, 0, $providerArguments.Length)
+# PowerShell 5.1 drops empty arguments at the batch boundary; preserve them as explicit CMD tokens.
+for ($i = 0; $i -lt $providerArguments.Length; $i++) {
+  if ($providerArguments[$i].Length -eq 0) { $providerArguments[$i] = '""' }
+}
 $exitCode = 1
 & $providerPath @providerArguments
 if ($null -eq $LASTEXITCODE) { $exitCode = 0 } else { $exitCode = [int]$LASTEXITCODE }
