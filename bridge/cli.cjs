@@ -5124,6 +5124,270 @@ var init_loader = __esm({
   }
 });
 
+// scripts/lib/utf8-bom.mjs
+function stripLeadingUtf8Bom(content) {
+  return content.startsWith("\uFEFF") ? content.slice(1) : content;
+}
+var init_utf8_bom = __esm({
+  "scripts/lib/utf8-bom.mjs"() {
+    "use strict";
+  }
+});
+
+// src/utils/frontmatter.ts
+function unquoteYamlScalar(value) {
+  if (value.startsWith('"') && value.endsWith('"')) return value.slice(1, -1);
+  if (value.startsWith("'") && value.endsWith("'"))
+    return value.slice(1, -1).replace(/''/g, "'");
+  return value;
+}
+function escapeYamlString(value) {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n").replace(/\r/g, "\\r");
+}
+function unescapeYamlString(value) {
+  return value.replace(/\\(\\|"|n|r)/g, (_, ch) => {
+    if (ch === "n") return "\n";
+    if (ch === "r") return "\r";
+    return ch;
+  });
+}
+function stripOptionalQuotes(value) {
+  const trimmed = value.trim();
+  return unquoteYamlScalar(trimmed).trim();
+}
+function parseBlockScalarHeader(rawValue) {
+  const match = BLOCK_SCALAR_HEADER.exec(rawValue);
+  if (!match) return null;
+  const chompingIndicator = match[2] ?? match[5];
+  const indentIndicator = match[3] ?? match[4];
+  return {
+    folded: match[1] === ">",
+    chomping: chompingIndicator === "+" ? "keep" : chompingIndicator === "-" ? "strip" : "clip",
+    ...indentIndicator ? { indentIndicator: Number(indentIndicator) } : {}
+  };
+}
+function countLeadingYamlSpaces(line) {
+  let count = 0;
+  while (line[count] === " ") count++;
+  return count;
+}
+function isBlankBlockScalarLine(line) {
+  return countLeadingYamlSpaces(line) === line.length;
+}
+function getBlockScalarContentIndent(lines, startIndex, parentIndent, header) {
+  if (header.indentIndicator !== void 0) {
+    return { value: parentIndent + header.indentIndicator, isDetermined: true };
+  }
+  let leadingBlankIndent = parentIndent;
+  for (let i = startIndex; i < lines.length; i++) {
+    const line = lines[i];
+    const indent = countLeadingYamlSpaces(line);
+    if (isBlankBlockScalarLine(line)) {
+      leadingBlankIndent = Math.max(leadingBlankIndent, indent);
+      continue;
+    }
+    if (indent > parentIndent) {
+      if (line[indent] === "#" && indent < leadingBlankIndent) {
+        return { value: leadingBlankIndent, isDetermined: false };
+      }
+      return { value: indent, isDetermined: true };
+    }
+    break;
+  }
+  return { value: parentIndent + 1, isDetermined: false };
+}
+function readBlockScalar(blockLines, header, contentIndent) {
+  const rows = blockLines.map((line) => {
+    const indent = countLeadingYamlSpaces(line);
+    if (isBlankBlockScalarLine(line) && !contentIndent.isDetermined)
+      return { text: "", moreIndented: false };
+    const moreIndented = indent > contentIndent.value || line[contentIndent.value] === "	";
+    return {
+      text: line.slice(Math.min(contentIndent.value, indent)),
+      moreIndented
+    };
+  });
+  let value;
+  if (header.folded) {
+    value = foldBlockScalarRows(rows);
+  } else {
+    value = rows.map((row) => row.text).join("\n") + (rows.length > 0 ? "\n" : "");
+  }
+  if (header.chomping === "keep") return value;
+  const withoutTrailingBreaks = value.replace(/\n+$/, "");
+  if (header.chomping === "strip" || !rows.some((row) => row.text !== ""))
+    return withoutTrailingBreaks;
+  return `${withoutTrailingBreaks}
+`;
+}
+function foldBlockScalarRows(rows) {
+  let value = "";
+  let previous;
+  let pendingEmptyLines = 0;
+  for (const row of rows) {
+    if (row.text === "") {
+      pendingEmptyLines++;
+      continue;
+    }
+    if (!previous) {
+      value += "\n".repeat(pendingEmptyLines);
+    } else if (pendingEmptyLines > 0) {
+      const preservedBreak = previous.moreIndented || row.moreIndented ? 1 : 0;
+      value += "\n".repeat(pendingEmptyLines + preservedBreak);
+    } else {
+      value += previous.moreIndented || row.moreIndented ? "\n" : " ";
+    }
+    value += row.text;
+    previous = row;
+    pendingEmptyLines = 0;
+  }
+  return value + "\n".repeat(previous ? pendingEmptyLines + 1 : pendingEmptyLines);
+}
+function parseFrontmatter(content) {
+  const frontmatterRegex = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)([\s\S]*)$/;
+  const match = stripLeadingUtf8Bom(content).match(frontmatterRegex);
+  if (!match) {
+    return { metadata: {}, body: content };
+  }
+  const [, yamlContent, body] = match;
+  const metadata = {};
+  const lines = yamlContent.split(/\r?\n/);
+  const rootLine = lines.find((line) => {
+    const trimmed = line.trimStart();
+    return trimmed.length > 0 && !trimmed.startsWith("#") && trimmed.includes(":");
+  });
+  const rootIndent = rootLine === void 0 ? void 0 : rootLine.length - rootLine.trimStart().length;
+  let flowDepth = 0;
+  let quote = null;
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    const line = lines[lineIndex];
+    const trimmed = line.trimStart();
+    const indent = line.length - trimmed.length;
+    if (flowDepth === 0) {
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      if (indent !== rootIndent) continue;
+      const colonIndex = line.indexOf(":");
+      if (colonIndex === -1) continue;
+      const key = line.slice(0, colonIndex).trim();
+      const rawValue = line.slice(colonIndex + 1).trim();
+      const blockHeader = parseBlockScalarHeader(rawValue);
+      if (blockHeader) {
+        const contentIndent = getBlockScalarContentIndent(
+          lines,
+          lineIndex + 1,
+          rootIndent,
+          blockHeader
+        );
+        const blockLines = [];
+        while (lineIndex + 1 < lines.length) {
+          const nextLine = lines[lineIndex + 1];
+          const nextIndent = countLeadingYamlSpaces(nextLine);
+          if (!isBlankBlockScalarLine(nextLine) && nextIndent < contentIndent.value)
+            break;
+          blockLines.push(lines[++lineIndex]);
+        }
+        metadata[key] = readBlockScalar(blockLines, blockHeader, contentIndent);
+        continue;
+      }
+      metadata[key] = stripOptionalQuotes(rawValue);
+    } else {
+    }
+    let scanFrom = 0;
+    if (flowDepth === 0) {
+      const colonIndex = line.indexOf(":");
+      const valueStart = colonIndex === -1 ? -1 : line.slice(colonIndex + 1).search(/\S/);
+      if (colonIndex !== -1 && valueStart !== -1) {
+        const firstValueChar = line[colonIndex + 1 + valueStart];
+        if (firstValueChar === "{" || firstValueChar === "[") {
+          scanFrom = colonIndex + 1 + valueStart;
+        }
+      }
+      if (scanFrom === 0) continue;
+    }
+    for (let i = scanFrom; i < line.length; i++) {
+      const char = line[i];
+      if (quote) {
+        if (quote === '"' && char === "\\") {
+          i++;
+          continue;
+        }
+        if (char === quote) {
+          if (quote === "'" && line[i + 1] === "'") {
+            i++;
+            continue;
+          }
+          quote = null;
+        }
+        continue;
+      }
+      if (char === '"' || char === "'") {
+        quote = char;
+        continue;
+      }
+      if (char === "#" && (i === 0 || line[i - 1] === " " || line[i - 1] === "	")) {
+        break;
+      }
+      if (char === "{" || char === "[") {
+        flowDepth++;
+      } else if ((char === "}" || char === "]") && flowDepth > 0) {
+        flowDepth--;
+      }
+    }
+  }
+  return { metadata, body };
+}
+function parseFrontmatterAliases(rawAliases) {
+  return parseFrontmatterList(rawAliases);
+}
+function splitFlowSequenceItems(inner) {
+  const items = [];
+  let current = "";
+  let quote = null;
+  for (let i = 0; i < inner.length; i++) {
+    const char = inner[i];
+    if (quote) {
+      current += char;
+      if (quote === '"' && char === "\\" && i + 1 < inner.length) {
+        current += inner[++i];
+      } else if (quote === "'" && char === "'" && inner[i + 1] === "'") {
+        current += inner[++i];
+      } else if (char === quote) {
+        quote = null;
+      }
+    } else if ((char === '"' || char === "'") && current.trim() === "") {
+      quote = char;
+      current += char;
+    } else if (char === ",") {
+      items.push(current);
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  items.push(current);
+  return items;
+}
+function parseFrontmatterList(rawValue) {
+  if (!rawValue) return [];
+  const trimmed = rawValue.trim();
+  if (!trimmed) return [];
+  if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+    const inner = trimmed.slice(1, -1).trim();
+    if (!inner) return [];
+    return splitFlowSequenceItems(inner).map((item) => stripOptionalQuotes(item)).filter((item) => item.length > 0);
+  }
+  const singleValue = stripOptionalQuotes(trimmed);
+  return singleValue ? [singleValue] : [];
+}
+var BLOCK_SCALAR_HEADER;
+var init_frontmatter = __esm({
+  "src/utils/frontmatter.ts"() {
+    "use strict";
+    init_utf8_bom();
+    BLOCK_SCALAR_HEADER = /^([|>])(?:(?:([+-])([1-9])?)|(?:([1-9])([+-])?))?(?:[ \t]+#.*)?$/;
+  }
+});
+
 // src/agents/utils.ts
 var utils_exports = {};
 __export(utils_exports, {
@@ -5134,11 +5398,13 @@ __export(utils_exports, {
   createAgentToolRestrictions: () => createAgentToolRestrictions,
   createEnvContext: () => createEnvContext,
   deepMerge: () => deepMerge2,
+  extractDisallowedTools: () => extractDisallowedTools,
   formatOpenQuestions: () => formatOpenQuestions,
   getAvailableAgents: () => getAvailableAgents,
   loadAgentPrompt: () => loadAgentPrompt,
   mergeAgentConfig: () => mergeAgentConfig,
   parseDisallowedTools: () => parseDisallowedTools,
+  stripFrontmatter: () => stripFrontmatter,
   validateAgentConfig: () => validateAgentConfig
 });
 function getPackageDir() {
@@ -5165,8 +5431,7 @@ function getPackageDir() {
   return process.cwd();
 }
 function stripFrontmatter(content) {
-  const match = content.match(/^---[\s\S]*?---\s*([\s\S]*)$/);
-  return match ? match[1].trim() : content.trim();
+  return parseFrontmatter(content).body.trim();
 }
 function loadAgentPrompt(agentName) {
   if (!/^[a-z0-9-]+$/i.test(agentName)) {
@@ -5311,14 +5576,15 @@ function parseDisallowedTools(agentName) {
       return void 0;
     }
     const content = (0, import_fs5.readFileSync)(agentPath, "utf-8");
-    const match = content.match(/^---[\s\S]*?---/);
-    if (!match) return void 0;
-    const disallowedMatch = match[0].match(/^disallowedTools:\s*(.+)/m);
-    if (!disallowedMatch) return void 0;
-    return disallowedMatch[1].split(",").map((t) => t.trim()).filter(Boolean);
+    return extractDisallowedTools(content);
   } catch {
     return void 0;
   }
+}
+function extractDisallowedTools(content) {
+  const value = parseFrontmatter(content).metadata.disallowedTools;
+  if (!value) return void 0;
+  return value.split(",").map((t) => t.trim()).filter(Boolean);
 }
 function formatOpenQuestions(topic, questions) {
   if (questions.length === 0) return "";
@@ -5353,6 +5619,7 @@ var init_utils = __esm({
     import_fs5 = require("fs");
     import_path6 = require("path");
     import_url = require("url");
+    init_frontmatter();
     OPEN_QUESTIONS_PATH = ".omc/plans/open-questions.md";
   }
 });
@@ -32739,10 +33006,16 @@ var init_worktree_paths = __esm({
 
 // src/lib/security-config.ts
 function sanitizeSecurityOverrides(raw) {
-  const parsed = securityOverridesSchema.parse(raw);
   const result = {};
-  for (const [key, value] of Object.entries(parsed)) {
-    if (value !== void 0) result[key] = value;
+  if (typeof raw.restrictToolPaths === "boolean") result.restrictToolPaths = raw.restrictToolPaths;
+  if (typeof raw.pythonSandbox === "boolean") result.pythonSandbox = raw.pythonSandbox;
+  if (typeof raw.disableProjectSkills === "boolean") result.disableProjectSkills = raw.disableProjectSkills;
+  if (typeof raw.disableAutoUpdate === "boolean") result.disableAutoUpdate = raw.disableAutoUpdate;
+  if (typeof raw.disableRemoteMcp === "boolean") result.disableRemoteMcp = raw.disableRemoteMcp;
+  if (typeof raw.disableExternalLLM === "boolean") result.disableExternalLLM = raw.disableExternalLLM;
+  const hardMaxIterations = raw.hardMaxIterations;
+  if (typeof hardMaxIterations === "number" && Number.isInteger(hardMaxIterations) && hardMaxIterations >= 0) {
+    result.hardMaxIterations = hardMaxIterations;
   }
   return result;
 }
@@ -32807,13 +33080,12 @@ function getHardMaxIterations() {
 function isExternalLLMDisabled() {
   return getSecurityConfig().disableExternalLLM;
 }
-var import_fs15, import_path20, DEFAULTS, STRICT_OVERRIDES, cachedConfig, optionalBoolean, securityOverrideShape, securityOverridesSchema;
+var import_fs15, import_path20, DEFAULTS, STRICT_OVERRIDES, cachedConfig;
 var init_security_config = __esm({
   "src/lib/security-config.ts"() {
     "use strict";
     import_fs15 = require("fs");
     import_path20 = require("path");
-    init_zod();
     init_jsonc();
     init_paths();
     DEFAULTS = {
@@ -32835,17 +33107,6 @@ var init_security_config = __esm({
       disableExternalLLM: true
     };
     cachedConfig = null;
-    optionalBoolean = external_exports.boolean().optional().catch(void 0);
-    securityOverrideShape = {
-      restrictToolPaths: optionalBoolean,
-      pythonSandbox: optionalBoolean,
-      disableProjectSkills: optionalBoolean,
-      disableAutoUpdate: optionalBoolean,
-      disableRemoteMcp: optionalBoolean,
-      disableExternalLLM: optionalBoolean,
-      hardMaxIterations: external_exports.number().int().nonnegative().optional().catch(void 0)
-    };
-    securityOverridesSchema = external_exports.object(securityOverrideShape);
   }
 });
 
@@ -34245,270 +34506,6 @@ var init_finder = __esm({
     import_fs19 = require("fs");
     import_path23 = require("path");
     init_constants();
-  }
-});
-
-// scripts/lib/utf8-bom.mjs
-function stripLeadingUtf8Bom(content) {
-  return content.startsWith("\uFEFF") ? content.slice(1) : content;
-}
-var init_utf8_bom = __esm({
-  "scripts/lib/utf8-bom.mjs"() {
-    "use strict";
-  }
-});
-
-// src/utils/frontmatter.ts
-function unquoteYamlScalar(value) {
-  if (value.startsWith('"') && value.endsWith('"')) return value.slice(1, -1);
-  if (value.startsWith("'") && value.endsWith("'"))
-    return value.slice(1, -1).replace(/''/g, "'");
-  return value;
-}
-function escapeYamlString(value) {
-  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n").replace(/\r/g, "\\r");
-}
-function unescapeYamlString(value) {
-  return value.replace(/\\(\\|"|n|r)/g, (_, ch) => {
-    if (ch === "n") return "\n";
-    if (ch === "r") return "\r";
-    return ch;
-  });
-}
-function stripOptionalQuotes(value) {
-  const trimmed = value.trim();
-  return unquoteYamlScalar(trimmed).trim();
-}
-function parseBlockScalarHeader(rawValue) {
-  const match = BLOCK_SCALAR_HEADER.exec(rawValue);
-  if (!match) return null;
-  const chompingIndicator = match[2] ?? match[5];
-  const indentIndicator = match[3] ?? match[4];
-  return {
-    folded: match[1] === ">",
-    chomping: chompingIndicator === "+" ? "keep" : chompingIndicator === "-" ? "strip" : "clip",
-    ...indentIndicator ? { indentIndicator: Number(indentIndicator) } : {}
-  };
-}
-function countLeadingYamlSpaces(line) {
-  let count = 0;
-  while (line[count] === " ") count++;
-  return count;
-}
-function isBlankBlockScalarLine(line) {
-  return countLeadingYamlSpaces(line) === line.length;
-}
-function getBlockScalarContentIndent(lines, startIndex, parentIndent, header) {
-  if (header.indentIndicator !== void 0) {
-    return { value: parentIndent + header.indentIndicator, isDetermined: true };
-  }
-  let leadingBlankIndent = parentIndent;
-  for (let i = startIndex; i < lines.length; i++) {
-    const line = lines[i];
-    const indent = countLeadingYamlSpaces(line);
-    if (isBlankBlockScalarLine(line)) {
-      leadingBlankIndent = Math.max(leadingBlankIndent, indent);
-      continue;
-    }
-    if (indent > parentIndent) {
-      if (line[indent] === "#" && indent < leadingBlankIndent) {
-        return { value: leadingBlankIndent, isDetermined: false };
-      }
-      return { value: indent, isDetermined: true };
-    }
-    break;
-  }
-  return { value: parentIndent + 1, isDetermined: false };
-}
-function readBlockScalar(blockLines, header, contentIndent) {
-  const rows = blockLines.map((line) => {
-    const indent = countLeadingYamlSpaces(line);
-    if (isBlankBlockScalarLine(line) && !contentIndent.isDetermined)
-      return { text: "", moreIndented: false };
-    const moreIndented = indent > contentIndent.value || line[contentIndent.value] === "	";
-    return {
-      text: line.slice(Math.min(contentIndent.value, indent)),
-      moreIndented
-    };
-  });
-  let value;
-  if (header.folded) {
-    value = foldBlockScalarRows(rows);
-  } else {
-    value = rows.map((row) => row.text).join("\n") + (rows.length > 0 ? "\n" : "");
-  }
-  if (header.chomping === "keep") return value;
-  const withoutTrailingBreaks = value.replace(/\n+$/, "");
-  if (header.chomping === "strip" || !rows.some((row) => row.text !== ""))
-    return withoutTrailingBreaks;
-  return `${withoutTrailingBreaks}
-`;
-}
-function foldBlockScalarRows(rows) {
-  let value = "";
-  let previous;
-  let pendingEmptyLines = 0;
-  for (const row of rows) {
-    if (row.text === "") {
-      pendingEmptyLines++;
-      continue;
-    }
-    if (!previous) {
-      value += "\n".repeat(pendingEmptyLines);
-    } else if (pendingEmptyLines > 0) {
-      const preservedBreak = previous.moreIndented || row.moreIndented ? 1 : 0;
-      value += "\n".repeat(pendingEmptyLines + preservedBreak);
-    } else {
-      value += previous.moreIndented || row.moreIndented ? "\n" : " ";
-    }
-    value += row.text;
-    previous = row;
-    pendingEmptyLines = 0;
-  }
-  return value + "\n".repeat(previous ? pendingEmptyLines + 1 : pendingEmptyLines);
-}
-function parseFrontmatter(content) {
-  const frontmatterRegex = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)([\s\S]*)$/;
-  const match = stripLeadingUtf8Bom(content).match(frontmatterRegex);
-  if (!match) {
-    return { metadata: {}, body: content };
-  }
-  const [, yamlContent, body] = match;
-  const metadata = {};
-  const lines = yamlContent.split(/\r?\n/);
-  const rootLine = lines.find((line) => {
-    const trimmed = line.trimStart();
-    return trimmed.length > 0 && !trimmed.startsWith("#") && trimmed.includes(":");
-  });
-  const rootIndent = rootLine === void 0 ? void 0 : rootLine.length - rootLine.trimStart().length;
-  let flowDepth = 0;
-  let quote = null;
-  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-    const line = lines[lineIndex];
-    const trimmed = line.trimStart();
-    const indent = line.length - trimmed.length;
-    if (flowDepth === 0) {
-      if (!trimmed || trimmed.startsWith("#")) continue;
-      if (indent !== rootIndent) continue;
-      const colonIndex = line.indexOf(":");
-      if (colonIndex === -1) continue;
-      const key = line.slice(0, colonIndex).trim();
-      const rawValue = line.slice(colonIndex + 1).trim();
-      const blockHeader = parseBlockScalarHeader(rawValue);
-      if (blockHeader) {
-        const contentIndent = getBlockScalarContentIndent(
-          lines,
-          lineIndex + 1,
-          rootIndent,
-          blockHeader
-        );
-        const blockLines = [];
-        while (lineIndex + 1 < lines.length) {
-          const nextLine = lines[lineIndex + 1];
-          const nextIndent = countLeadingYamlSpaces(nextLine);
-          if (!isBlankBlockScalarLine(nextLine) && nextIndent < contentIndent.value)
-            break;
-          blockLines.push(lines[++lineIndex]);
-        }
-        metadata[key] = readBlockScalar(blockLines, blockHeader, contentIndent);
-        continue;
-      }
-      metadata[key] = stripOptionalQuotes(rawValue);
-    } else {
-    }
-    let scanFrom = 0;
-    if (flowDepth === 0) {
-      const colonIndex = line.indexOf(":");
-      const valueStart = colonIndex === -1 ? -1 : line.slice(colonIndex + 1).search(/\S/);
-      if (colonIndex !== -1 && valueStart !== -1) {
-        const firstValueChar = line[colonIndex + 1 + valueStart];
-        if (firstValueChar === "{" || firstValueChar === "[") {
-          scanFrom = colonIndex + 1 + valueStart;
-        }
-      }
-      if (scanFrom === 0) continue;
-    }
-    for (let i = scanFrom; i < line.length; i++) {
-      const char = line[i];
-      if (quote) {
-        if (quote === '"' && char === "\\") {
-          i++;
-          continue;
-        }
-        if (char === quote) {
-          if (quote === "'" && line[i + 1] === "'") {
-            i++;
-            continue;
-          }
-          quote = null;
-        }
-        continue;
-      }
-      if (char === '"' || char === "'") {
-        quote = char;
-        continue;
-      }
-      if (char === "#" && (i === 0 || line[i - 1] === " " || line[i - 1] === "	")) {
-        break;
-      }
-      if (char === "{" || char === "[") {
-        flowDepth++;
-      } else if ((char === "}" || char === "]") && flowDepth > 0) {
-        flowDepth--;
-      }
-    }
-  }
-  return { metadata, body };
-}
-function parseFrontmatterAliases(rawAliases) {
-  return parseFrontmatterList(rawAliases);
-}
-function splitFlowSequenceItems(inner) {
-  const items = [];
-  let current = "";
-  let quote = null;
-  for (let i = 0; i < inner.length; i++) {
-    const char = inner[i];
-    if (quote) {
-      current += char;
-      if (quote === '"' && char === "\\" && i + 1 < inner.length) {
-        current += inner[++i];
-      } else if (quote === "'" && char === "'" && inner[i + 1] === "'") {
-        current += inner[++i];
-      } else if (char === quote) {
-        quote = null;
-      }
-    } else if ((char === '"' || char === "'") && current.trim() === "") {
-      quote = char;
-      current += char;
-    } else if (char === ",") {
-      items.push(current);
-      current = "";
-    } else {
-      current += char;
-    }
-  }
-  items.push(current);
-  return items;
-}
-function parseFrontmatterList(rawValue) {
-  if (!rawValue) return [];
-  const trimmed = rawValue.trim();
-  if (!trimmed) return [];
-  if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-    const inner = trimmed.slice(1, -1).trim();
-    if (!inner) return [];
-    return splitFlowSequenceItems(inner).map((item) => stripOptionalQuotes(item)).filter((item) => item.length > 0);
-  }
-  const singleValue = stripOptionalQuotes(trimmed);
-  return singleValue ? [singleValue] : [];
-}
-var BLOCK_SCALAR_HEADER;
-var init_frontmatter = __esm({
-  "src/utils/frontmatter.ts"() {
-    "use strict";
-    init_utf8_bom();
-    BLOCK_SCALAR_HEADER = /^([|>])(?:(?:([+-])([1-9])?)|(?:([1-9])([+-])?))?(?:[ \t]+#.*)?$/;
   }
 });
 
@@ -63507,8 +63504,8 @@ var init_routing = __esm({
 
 // src/hooks/session-end/guardrails.ts
 function dailyChainLimit() {
-  const raw = Number(process.env.OMC_DAILY_CHAIN_LIMIT);
-  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : DAILY_CHAIN_LIMIT;
+  const raw = Math.floor(Number(process.env.OMC_DAILY_CHAIN_LIMIT));
+  return Number.isFinite(raw) && raw >= 1 ? raw : DAILY_CHAIN_LIMIT;
 }
 function chainDayKey(now = /* @__PURE__ */ new Date()) {
   const y = now.getFullYear();
@@ -101476,12 +101473,52 @@ function findLastCompactBoundaryEndOffset(transcriptPath, size) {
   }
   return null;
 }
+function countLocalApiRequestRecordBytes(transcriptPath, start, end) {
+  if (end <= start) return 0;
+  const fd = (0, import_fs145.openSync)(transcriptPath, "r");
+  try {
+    const chunk = Buffer.allocUnsafe(SCAN_CHUNK_BYTES);
+    const prefix = Buffer.allocUnsafe(LOCAL_API_REQUEST_PREFIX.length);
+    let excludedBytes = 0;
+    let lineStart = start;
+    const countLine = (lineEndExclusive) => {
+      const lineLength = lineEndExclusive - lineStart;
+      if (lineLength >= prefix.length) {
+        const bytesRead = (0, import_fs145.readSync)(fd, prefix, 0, prefix.length, lineStart);
+        if (bytesRead === prefix.length && prefix.equals(LOCAL_API_REQUEST_PREFIX)) {
+          excludedBytes += lineLength;
+        }
+      }
+      lineStart = lineEndExclusive;
+    };
+    let position = start;
+    while (position < end) {
+      const length = Math.min(SCAN_CHUNK_BYTES, end - position);
+      (0, import_fs145.readSync)(fd, chunk, 0, length, position);
+      const view = chunk.subarray(0, length);
+      let newline = view.indexOf(10);
+      while (newline !== -1) {
+        countLine(position + newline + 1);
+        newline = view.indexOf(10, newline + 1);
+      }
+      position += length;
+    }
+    if (lineStart < end) countLine(end);
+    return excludedBytes;
+  } finally {
+    (0, import_fs145.closeSync)(fd);
+  }
+}
 function estimateTranscriptPayloadBytes(transcriptPath, size) {
   const boundaryEndOffset = findLastCompactBoundaryEndOffset(
     transcriptPath,
     size
   );
-  return boundaryEndOffset === null ? size : Math.max(0, size - boundaryEndOffset);
+  const start = boundaryEndOffset ?? 0;
+  return Math.max(
+    0,
+    size - start - countLocalApiRequestRecordBytes(transcriptPath, start, size)
+  );
 }
 function estimatePayloadFromTranscriptPath(transcriptPath) {
   if (!transcriptPath || !(0, import_fs145.existsSync)(transcriptPath)) return null;
@@ -101495,7 +101532,7 @@ function estimatePayloadFromTranscriptPath(transcriptPath) {
     return null;
   }
 }
-var import_fs145, ANTHROPIC_REQUEST_PAYLOAD_LIMIT_BYTES, PAYLOAD_WARNING_BYTES, PAYLOAD_CRITICAL_BYTES, COMPACT_BOUNDARY_MARKER, COMPACT_BOUNDARY_MARKER_BYTES, SCAN_CHUNK_BYTES, MAX_BOUNDARY_LINE_BYTES;
+var import_fs145, ANTHROPIC_REQUEST_PAYLOAD_LIMIT_BYTES, PAYLOAD_WARNING_BYTES, PAYLOAD_CRITICAL_BYTES, COMPACT_BOUNDARY_MARKER, COMPACT_BOUNDARY_MARKER_BYTES, LOCAL_API_REQUEST_PREFIX, SCAN_CHUNK_BYTES, MAX_BOUNDARY_LINE_BYTES;
 var init_payload_estimate = __esm({
   "src/hud/payload-estimate.ts"() {
     "use strict";
@@ -101505,6 +101542,7 @@ var init_payload_estimate = __esm({
     PAYLOAD_CRITICAL_BYTES = 26e6;
     COMPACT_BOUNDARY_MARKER = "compact_boundary";
     COMPACT_BOUNDARY_MARKER_BYTES = Buffer.from(COMPACT_BOUNDARY_MARKER);
+    LOCAL_API_REQUEST_PREFIX = Buffer.from('{"type":"api-request');
     SCAN_CHUNK_BYTES = 64 * 1024;
     MAX_BOUNDARY_LINE_BYTES = 256 * 1024;
   }
@@ -126030,6 +126068,20 @@ async function teamCommand(args) {
   }
 }
 
+// src/cli/utils/integer-option.ts
+function integerOption(min, max = Number.MAX_SAFE_INTEGER) {
+  return (value) => {
+    const normalized = value.trim();
+    const parsed = Number(normalized);
+    if (!/^[+-]?\d+$/.test(normalized) || !Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
+      throw new InvalidArgumentError(
+        max === Number.MAX_SAFE_INTEGER ? `must be an integer of at least ${min}` : `must be an integer between ${min} and ${max}`
+      );
+    }
+    return parsed;
+  };
+}
+
 // src/cli/commands/ralphthon.ts
 init_tmux_utils();
 var import_fs131 = require("fs");
@@ -126570,6 +126622,17 @@ Examples:
   omc ralphthon --resume
   omc ralphthon --max-waves 5 --poll-interval 60 "Add caching layer"
 `;
+var parsePositiveInteger = integerOption(1);
+function parsePositiveIntegerFlag(flag, value) {
+  if (value === void 0) {
+    throw new Error(`${flag} requires a value`);
+  }
+  try {
+    return parsePositiveInteger(value);
+  } catch (error2) {
+    throw new Error(`${flag} ${error2.message} (got "${value}")`);
+  }
+}
 function parseRalphthonArgs(args) {
   const options = {
     resume: false,
@@ -126587,16 +126650,12 @@ function parseRalphthonArgs(args) {
       case "--skip-interview":
         options.skipInterview = true;
         break;
-      case "--max-waves": {
-        const val = parseInt(args[++i], 10);
-        if (!isNaN(val) && val > 0) options.maxWaves = val;
+      case "--max-waves":
+        options.maxWaves = parsePositiveIntegerFlag("--max-waves", args[++i]);
         break;
-      }
-      case "--poll-interval": {
-        const val = parseInt(args[++i], 10);
-        if (!isNaN(val) && val > 0) options.pollInterval = val;
+      case "--poll-interval":
+        options.pollInterval = parsePositiveIntegerFlag("--poll-interval", args[++i]);
         break;
-      }
       case "--help":
       case "-h":
         console.log(RALPHTHON_HELP);
@@ -126759,7 +126818,13 @@ function isInsideTmux2() {
   return !!process.env.TMUX;
 }
 async function ralphthonCommand(args) {
-  const options = parseRalphthonArgs(args);
+  let options;
+  try {
+    options = parseRalphthonArgs(args);
+  } catch (error2) {
+    console.error(source_default.red(error2.message));
+    process.exit(1);
+  }
   const cwd2 = process.cwd();
   if (options.resume) {
     const state = readRalphthonState(cwd2);
@@ -131398,20 +131463,6 @@ function intakeCommand() {
     process.exitCode = result.exitCode;
   });
   return cmd;
-}
-
-// src/cli/utils/integer-option.ts
-function integerOption(min, max = Number.MAX_SAFE_INTEGER) {
-  return (value) => {
-    const normalized = value.trim();
-    const parsed = Number(normalized);
-    if (!/^[+-]?\d+$/.test(normalized) || !Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
-      throw new InvalidArgumentError(
-        max === Number.MAX_SAFE_INTEGER ? `must be an integer of at least ${min}` : `must be an integer between ${min} and ${max}`
-      );
-    }
-    return parsed;
-  };
 }
 
 // src/cli/commands/factory.ts

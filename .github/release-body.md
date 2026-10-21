@@ -1,40 +1,31 @@
-# oh-my-claudecode v5.7.4: More reliable hooks, team workflows, HUD, and Jev planning
+# oh-my-claudecode v5.7.6: Build artifact fixes and hook improvements
 
 ## Release Notes
 
-Release with **1 new feature**, **4 bug fixes**, **1 performance improvement**, and **3 test improvements** across **9 merged PRs**.
+Maintenance release with **5 bug fixes** and **2 improvements** across **10 merged PRs**, syncing improvements from main.
 
 ### Highlights
 
-- **feat(jev): add OMC_JEV_PLAN_MODE to keep Jev from deciding in plan mode** (#4395)
-- **fix(team): quarantine stale Cursor verdicts and retain them on unreadable tasks** (#4380)
-- **perf(hooks): launch the file-context injectors only for the tools they act on** (#4373)
-
-### New Features
-
-- **feat(jev): add OMC_JEV_PLAN_MODE to keep Jev from deciding in plan mode** (#4395)
-
-### Performance Improvements
-
-- **perf(hooks): launch the file-context injectors only for the tools they act on** (#4373)
-  - File-context injectors now launch only for the tools they act on, reducing hook overhead.
+- **fix: remove zod from plugin HUD security config** (#4455)
+- **fix(hooks): fall back from blank shell config directory overrides** (#4474)
+- **fix(hooks): honor trailing commas in agent model JSONC** (#4473)
 
 ### Bug Fixes
 
-- **fix(plugin-cache): link stale plugin roots only to a real cache directory** (#4375)
-- **fix(installer): log CLAUDE.md as already up to date when install leaves it unchanged** (#4377)
-- **fix(team): quarantine stale Cursor verdicts and retain them on unreadable tasks** (#4380)
-- **fix: scope HUD stdin cache per session using stdin.session_id** (#4398)
+- **fix(hud): preserve Node install global npm prefix** (#4471)
+- **fix(hud): sanitize project npm prefix environment** (#4471)
+- **fix(hud): restrict npm fallback to global prefix** (#4471)
+- **fix(autoresearch): accept a leading UTF-8 BOM in sandbox.md frontmatter** (#4452)
+- **fix(agents): read agent frontmatter by line-anchored delimiters and after a BOM** (#4451)
 
-### Test Improvements
+### Improvements
 
-- **test(run-cjs): blank user-level OMC env in the worker skip-guard hook spawns** (#4376)
-- **test(atomic-write): give SQLite contention timing bounds a runner margin** (#4385)
-- **test: make shutdown and state-clear race checks environment-independent** (#4379)
+- **fix: remove zod from plugin HUD security config** (#4455) - Reduce plugin runtime security boundary
+- **fix(hooks): fall back from blank shell config directory overrides** (#4474) - Improved hook environment handling
 
 ### Stats
 
-- **9 PRs merged** | **1 new feature** | **4 bug fixes** | **1 performance improvement** | **3 test improvements**
+- **10 PRs merged** | **5 bug fixes** | **2 improvements**
 
 ### Install / Update
 
@@ -43,7 +34,7 @@ The npm CLI and the Claude Code marketplace/plugin are separate install tracks, 
 **CLI / runtime:**
 
 ```bash
-npm install -g oh-my-claude-sisyphus@5.7.4
+npm install -g oh-my-claude-sisyphus@5.7.6
 ```
 
 **Claude Code plugin:**
@@ -52,4 +43,4 @@ npm install -g oh-my-claude-sisyphus@5.7.4
 /plugin marketplace update omc
 ```
 
-**Full Changelog**: https://github.com/Yeachan-Heo/oh-my-claudecode/compare/v5.7.3...v5.7.4
+**Full Changelog**: https://github.com/Yeachan-Heo/oh-my-claudecode/compare/v5.7.5...v5.7.6

@@ -18524,22 +18524,17 @@ var STRICT_OVERRIDES = {
   disableExternalLLM: true
 };
 var cachedConfig = null;
-var optionalBoolean = external_exports.boolean().optional().catch(void 0);
-var securityOverrideShape = {
-  restrictToolPaths: optionalBoolean,
-  pythonSandbox: optionalBoolean,
-  disableProjectSkills: optionalBoolean,
-  disableAutoUpdate: optionalBoolean,
-  disableRemoteMcp: optionalBoolean,
-  disableExternalLLM: optionalBoolean,
-  hardMaxIterations: external_exports.number().int().nonnegative().optional().catch(void 0)
-};
-var securityOverridesSchema = external_exports.object(securityOverrideShape);
 function sanitizeSecurityOverrides(raw) {
-  const parsed = securityOverridesSchema.parse(raw);
   const result = {};
-  for (const [key, value] of Object.entries(parsed)) {
-    if (value !== void 0) result[key] = value;
+  if (typeof raw.restrictToolPaths === "boolean") result.restrictToolPaths = raw.restrictToolPaths;
+  if (typeof raw.pythonSandbox === "boolean") result.pythonSandbox = raw.pythonSandbox;
+  if (typeof raw.disableProjectSkills === "boolean") result.disableProjectSkills = raw.disableProjectSkills;
+  if (typeof raw.disableAutoUpdate === "boolean") result.disableAutoUpdate = raw.disableAutoUpdate;
+  if (typeof raw.disableRemoteMcp === "boolean") result.disableRemoteMcp = raw.disableRemoteMcp;
+  if (typeof raw.disableExternalLLM === "boolean") result.disableExternalLLM = raw.disableExternalLLM;
+  const hardMaxIterations = raw.hardMaxIterations;
+  if (typeof hardMaxIterations === "number" && Number.isInteger(hardMaxIterations) && hardMaxIterations >= 0) {
+    result.hardMaxIterations = hardMaxIterations;
   }
   return result;
 }
