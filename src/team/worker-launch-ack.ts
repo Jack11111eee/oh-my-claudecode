@@ -42,6 +42,43 @@ export function buildWindowsSupervisorSource(): string {
     '$json = $payload.canonical_json',
     '$hash = ([Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes($json)) | ForEach-Object { $_.ToString("x2") }) -join ""',
     'if ($hash -ne $payload.authority_digest) { throw "worker_launch_authority_digest_mismatch" }',
+    '$authority = $json | ConvertFrom-Json; if ($authority.provider_argv.Count -ne $payload.provider_argv.Count) { throw "worker_launch_authority_argv_mismatch" }; for ($i = 0; $i -lt $authority.provider_argv.Count; $i++) { if ([string]$authority.provider_argv[$i] -cne [string]$payload.provider_argv[$i]) { throw "worker_launch_authority_argv_mismatch" } }',
+    String.raw`function Quote-ProviderCmdArgument([string]$value) {
+  if ($value.IndexOf([char]13) -ge 0 -or $value.IndexOf([char]10) -ge 0) { throw "worker_launch_provider_argv_invalid" }
+  return '"' + $value.Replace('%', '%%').Replace('"', '""') + '"'
+}
+function New-ProviderLaunchInvocation {
+  param([string[]]$ProviderArgv, [string]$SystemRoot)
+  if ($ProviderArgv.Count -eq 0) { throw "worker_launch_provider_argv_missing" }
+  $providerPath = $ProviderArgv[0]
+  if ([System.IO.Path]::GetExtension($providerPath) -notmatch '^\.(cmd|bat)$') {
+    return @{ provider_argv = $ProviderArgv; batch_path = $null }
+  }
+  if (-not [regex]::IsMatch($providerPath, '^(?:[A-Za-z]:[\\/]|\\\\[^\\/]+[\\/][^\\/]+[\\/])')
+      -or -not [System.IO.File]::Exists($providerPath)
+      -or -not [regex]::IsMatch($SystemRoot, '^[A-Za-z]:\\')) {
+    throw "worker_launch_provider_executable_invalid"
+  }
+  $cmdPath = [System.IO.Path]::Combine($SystemRoot, 'System32\cmd.exe')
+  if (-not [System.IO.File]::Exists($cmdPath)) { throw "worker_launch_provider_executable_invalid" }
+  $batchPath = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), ('omc-worker-' + [Guid]::NewGuid().ToString('N') + '.cmd'))
+  $quotedArgv = @($ProviderArgv | ForEach-Object { Quote-ProviderCmdArgument ([string]$_) }) -join ' '
+  $lineEnding = [string][char]13 + [char]10
+  $script = '@echo off' + $lineEnding + 'start "" /b /wait ' + $quotedArgv + $lineEnding
+  $batchFile = [System.IO.File]::Open($batchPath, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+  try {
+    $bytes = [System.Text.UTF8Encoding]::new($false).GetBytes($script)
+    $batchFile.Write($bytes, 0, $bytes.Length)
+  } catch {
+    $batchFile.Dispose()
+    $batchFile = $null
+    Remove-Item -LiteralPath $batchPath -Force -ErrorAction SilentlyContinue
+    throw
+  } finally {
+    if ($batchFile) { $batchFile.Dispose() }
+  }
+  return @{ provider_argv = [string[]]@($cmdPath, '/d', '/v:off', '/s', '/c', ('"' + $batchPath + '"')); batch_path = $batchPath }
+}`,
     'Add-Type @"',
     'using System; using System.Text; using System.Runtime.InteropServices;',
     String.raw`public static partial class O { [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Unicode)] public struct STARTUPINFO { public int cb; public IntPtr lpReserved; public IntPtr lpDesktop; public IntPtr lpTitle; public int dwX; public int dwY; public int dwXSize; public int dwYSize; public int dwXCountChars; public int dwYCountChars; public int dwFillAttribute; public int dwFlags; public short wShowWindow; public short cbReserved2; public IntPtr lpReserved2; public IntPtr hStdInput; public IntPtr hStdOutput; public IntPtr hStdError; } [StructLayout(LayoutKind.Sequential)] public struct PROCESS_INFORMATION { public IntPtr hProcess; public IntPtr hThread; public uint dwProcessId; public uint dwThreadId; } [StructLayout(LayoutKind.Sequential)] public struct JOBOBJECT_BASIC_LIMIT_INFORMATION { public long PerProcessUserTimeLimit; public long PerJobUserTimeLimit; public uint LimitFlags; public UIntPtr MinimumWorkingSetSize; public UIntPtr MaximumWorkingSetSize; public uint ActiveProcessLimit; public UIntPtr Affinity; public uint PriorityClass; public uint SchedulingClass; } [StructLayout(LayoutKind.Sequential)] public struct IO_COUNTERS { public ulong ReadOperationCount; public ulong WriteOperationCount; public ulong OtherOperationCount; public ulong ReadTransferCount; public ulong WriteTransferCount; public ulong OtherTransferCount; } [StructLayout(LayoutKind.Sequential)] public struct JOBOBJECT_EXTENDED_LIMIT_INFORMATION { public JOBOBJECT_BASIC_LIMIT_INFORMATION BasicLimitInformation; public IO_COUNTERS IoInfo; public UIntPtr ProcessMemoryLimit; public UIntPtr JobMemoryLimit; public UIntPtr PeakProcessMemoryUsed; public UIntPtr PeakJobMemoryUsed; } [DllImport("kernel32.dll", SetLastError=true)] public static extern IntPtr CreateJobObjectW(IntPtr a, string n); [DllImport("kernel32.dll", SetLastError=true)] public static extern bool SetInformationJobObject(IntPtr j, int c, IntPtr i, uint l); [DllImport("kernel32.dll", SetLastError=true)] public static extern bool AssignProcessToJobObject(IntPtr j, IntPtr p); [DllImport("kernel32.dll", SetLastError=true)] public static extern uint ResumeThread(IntPtr h); [DllImport("kernel32.dll", SetLastError=true)] public static extern bool TerminateJobObject(IntPtr j, uint c); [DllImport("kernel32.dll", SetLastError=true)] public static extern bool TerminateProcess(IntPtr p, uint c); [DllImport("kernel32.dll", SetLastError=true)] public static extern uint WaitForSingleObject(IntPtr h, uint ms); [DllImport("kernel32.dll", SetLastError=true)] public static extern bool GetExitCodeProcess(IntPtr h, out uint code); [DllImport("kernel32.dll")] public static extern bool CloseHandle(IntPtr h); public static System.Threading.Tasks.Task<string> ReadLineAsync() { return System.Threading.Tasks.Task.Run(() => Console.In.ReadLine()); } public static string Quote(string value) { var b = new StringBuilder(); b.Append('\"'); int slashes = 0; foreach (var c in value) { if (c == '\\') { slashes++; continue; } if (c == '\"') { b.Append('\\', slashes * 2 + 1); b.Append('\"'); slashes = 0; continue; } b.Append('\\', slashes); slashes = 0; b.Append(c); } b.Append('\\', slashes * 2); b.Append('\"'); return b.ToString(); } public static string BuildCommandLine(string[] argv) { var b = new StringBuilder(); for (var i = 0; i < argv.Length; i++) { if (i != 0) b.Append(' '); b.Append(Quote(argv[i])); } return b.ToString(); } }`.split('\n').map(line => line.trim()).filter(line => line.length > 0 && !line.startsWith('//')).join(' '),
@@ -125,15 +162,15 @@ export function buildWindowsSupervisorSource(): string {
   }
 }`,
     '"@',
-    '$pi = New-Object O+PROCESS_INFORMATION; $job = [IntPtr]::Zero; $jobAssigned = $false; $envPtr = [IntPtr]::Zero; $cmd = $null',
+    '$pi = New-Object O+PROCESS_INFORMATION; $job = [IntPtr]::Zero; $jobAssigned = $false; $envPtr = [IntPtr]::Zero; $cmd = $null; $batchPath = $null; $launchArgv = $null',
     'try {',
-    '  $cmd = [O]::BuildCommandLine([string[]]$payload.provider_argv)',
+    '  $launch = New-ProviderLaunchInvocation -ProviderArgv ([string[]]$authority.provider_argv) -SystemRoot ([string]$payload.provider_env.SystemRoot); $batchPath = $launch.batch_path; $launchArgv = [string[]]$launch.provider_argv; $cmd = [O]::BuildCommandLine($launchArgv)',
     '  $envPairs = @($payload.provider_env.psobject.Properties | Sort-Object Name | ForEach-Object { "$($_.Name)=$($_.Value)" }); $envText = (($envPairs -join [char]0) + [char]0 + [char]0); $envBytes = [Text.Encoding]::Unicode.GetBytes($envText); $envPtr = [Runtime.InteropServices.Marshal]::AllocHGlobal($envBytes.Length); [Runtime.InteropServices.Marshal]::Copy($envBytes, 0, $envPtr, $envBytes.Length)',
-    '  [O]::CreateConsoleProcess([string]$payload.provider_argv[0], $cmd, $envPtr, $payload.cwd, [ref]$pi)',
+    '  [O]::CreateConsoleProcess([string]$launchArgv[0], $cmd, $envPtr, $payload.cwd, [ref]$pi)',
     '  $job = [O]::CreateJobObjectW([IntPtr]::Zero, $null); if ($job -eq [IntPtr]::Zero) { throw "worker_launch_create_job_failed" }; $info = New-Object O+JOBOBJECT_EXTENDED_LIMIT_INFORMATION; $info.BasicLimitInformation.LimitFlags = 0x2000; $ptr = [Runtime.InteropServices.Marshal]::AllocHGlobal([Runtime.InteropServices.Marshal]::SizeOf($info)); try { [Runtime.InteropServices.Marshal]::StructureToPtr($info, $ptr, $false); if (-not [O]::SetInformationJobObject($job, 9, $ptr, [Runtime.InteropServices.Marshal]::SizeOf($info))) { throw "worker_launch_job_config_failed" } } finally { [Runtime.InteropServices.Marshal]::FreeHGlobal($ptr) }; if (-not [O]::AssignProcessToJobObject($job, $pi.hProcess)) { throw "worker_launch_assign_job_failed" }; $jobAssigned = $true; if ([O]::ResumeThread($pi.hThread) -eq [uint32]::MaxValue) { throw "worker_launch_resume_failed" }',
     '  $ticks = ([DateTime]((Get-Process -Id $pi.dwProcessId).StartTime)).ToUniversalTime().Ticks; $ready = @{ protocol="' + WINDOWS_SUPERVISOR_PROTOCOL + '"; kind="ready"; attempt_id=$payload.identity.attempt_id; instance_id=$payload.identity.instance_id; authority_digest=$payload.authority_digest; containment_nonce=$payload.containment_nonce; pid=$pi.dwProcessId; process_start_identity=("ticks:" + $ticks) } | ConvertTo-Json -Compress; [Console]::Out.WriteLine($ready); [Console]::Out.Flush()',
     '  $readTask = [O]::ReadLineAsync(); while ($true) { if ([O]::WaitForSingleObject($pi.hProcess, 50) -eq 0) { $exitCode = [uint32]0; if (-not [O]::GetExitCodeProcess($pi.hProcess, [ref]$exitCode)) { throw "worker_launch_exit_code_failed" }; if (-not [O]::TerminateJobObject($job, $exitCode)) { throw "worker_launch_job_terminate_failed" }; if ([O]::WaitForSingleObject($job, 5000) -ne 0) { throw "worker_launch_job_cleanup_timeout" }; $terminal = @{ protocol="' + WINDOWS_SUPERVISOR_PROTOCOL + '"; kind="terminal"; attempt_id=$payload.identity.attempt_id; instance_id=$payload.identity.instance_id; authority_digest=$payload.authority_digest; containment_nonce=$payload.containment_nonce; pid=$pi.dwProcessId; outcome="exit"; cleanup_verified=$true; exit_code=$exitCode } | ConvertTo-Json -Compress; [Console]::Out.WriteLine($terminal); [Console]::Out.Flush(); break }; if (-not $readTask.IsCompleted) { continue }; $line = $readTask.Result; if ($null -eq $line) { throw "worker_launch_authority_lost" }; $readTask = [O]::ReadLineAsync(); if ([string]::IsNullOrWhiteSpace($line) -or $line.Length -gt 4096) { continue }; try { $msg = $line | ConvertFrom-Json } catch { continue }; if ($msg.protocol -ne "' + WINDOWS_SUPERVISOR_PROTOCOL + '" -or $msg.attempt_id -ne $payload.identity.attempt_id -or $msg.instance_id -ne $payload.identity.instance_id -or $msg.authority_digest -ne $payload.authority_digest -or $msg.containment_nonce -ne $payload.containment_nonce -or $msg.kind -ne "terminate") { continue }; if (-not [O]::TerminateJobObject($job, 1)) { throw "worker_launch_job_terminate_failed" }; if ([O]::WaitForSingleObject($job, 5000) -ne 0) { throw "worker_launch_job_cleanup_timeout" }; $terminal = @{ protocol="' + WINDOWS_SUPERVISOR_PROTOCOL + '"; kind="terminal"; attempt_id=$payload.identity.attempt_id; instance_id=$payload.identity.instance_id; authority_digest=$payload.authority_digest; containment_nonce=$payload.containment_nonce; pid=$pi.dwProcessId; outcome="terminated"; cleanup_verified=$true; exit_code=1 } | ConvertTo-Json -Compress; [Console]::Out.WriteLine($terminal); [Console]::Out.Flush(); break }',
-    '} catch { if ($pi.hProcess -ne [IntPtr]::Zero) { if ($jobAssigned) { [O]::TerminateJobObject($job, 1) | Out-Null } else { [O]::TerminateProcess($pi.hProcess, 1) | Out-Null }; [O]::WaitForSingleObject($pi.hProcess, 5000) | Out-Null }; throw } finally { if ($envPtr -ne [IntPtr]::Zero) { [Runtime.InteropServices.Marshal]::FreeHGlobal($envPtr) }; if ($pi.hThread -ne [IntPtr]::Zero) { [O]::CloseHandle($pi.hThread) | Out-Null }; if ($pi.hProcess -ne [IntPtr]::Zero) { [O]::CloseHandle($pi.hProcess) | Out-Null }; if ($job -ne [IntPtr]::Zero) { [O]::CloseHandle($job) | Out-Null } }',
+    '} catch { if ($pi.hProcess -ne [IntPtr]::Zero) { if ($jobAssigned) { [O]::TerminateJobObject($job, 1) | Out-Null } else { [O]::TerminateProcess($pi.hProcess, 1) | Out-Null }; [O]::WaitForSingleObject($pi.hProcess, 5000) | Out-Null }; throw } finally { if ($batchPath) { Remove-Item -LiteralPath $batchPath -Force -ErrorAction SilentlyContinue }; if ($envPtr -ne [IntPtr]::Zero) { [Runtime.InteropServices.Marshal]::FreeHGlobal($envPtr) }; if ($pi.hThread -ne [IntPtr]::Zero) { [O]::CloseHandle($pi.hThread) | Out-Null }; if ($pi.hProcess -ne [IntPtr]::Zero) { [O]::CloseHandle($pi.hProcess) | Out-Null }; if ($job -ne [IntPtr]::Zero) { [O]::CloseHandle($job) | Out-Null } }',
   ].join('\n');
 }
 
