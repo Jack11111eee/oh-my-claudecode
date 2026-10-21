@@ -69,7 +69,8 @@ try {
   foreach ($literal in @('chcp 65001 >nul', '100%% ready', '%%USERPROFILE%%', 'bang!', 'caret^', 'say ""hello"" & continue', 'two words', 'Grüße-λ-漢字')) {
     if (-not $batch.Contains($literal)) { throw "Batch wrapper lost literal argument: $literal; batch content: $batch" }
   }
-  if (-not ($batch -match [regex]::Escape($quotedArgv))) { throw "Batch wrapper lost provider invocation line; batch content: $batch" }
+  $expectedProviderInvocation = @($providerArgv | ForEach-Object { Quote-ProviderCmdArgument ([string]$_) }) -join ' '
+  if (-not $batch.Contains($expectedProviderInvocation)) { throw "Batch wrapper lost provider invocation line; expected: $expectedProviderInvocation; batch content: $batch" }
   $prefix = [O]::BuildCommandLine([string[]]@($launch.application_path))
   if (-not $launch.command_line.StartsWith($prefix + ' ', [StringComparison]::Ordinal)) { throw 'Expected application path prefix in command line' }
   $startInfo = New-Object System.Diagnostics.ProcessStartInfo
@@ -81,7 +82,9 @@ try {
   if (-not $process.WaitForExit(15000)) { $process.Kill(); throw 'Generated cmd.exe provider wrapper timed out' }
   if ($process.ExitCode -ne 37) { throw "Expected provider exit code 37, got $($process.ExitCode); generated command line: $($launch.command_line); expanded command line: $($launch.command_line.Replace('%TEMP%', $helperRoot)); batch content: $batch" }
   $actualArgv = [IO.File]::ReadAllText((Join-Path $helperRoot 'argv.json')) | ConvertFrom-Json
-  if ((ConvertTo-Json -InputObject $actualArgv -Compress) -cne (ConvertTo-Json -InputObject $payloadArgv -Compress)) { throw 'Generated wrapper changed provider argv' }
+  $actualArgvJson = ConvertTo-Json -InputObject $actualArgv -Compress
+  $expectedArgvJson = ConvertTo-Json -InputObject $payloadArgv -Compress
+  if ($actualArgvJson -cne $expectedArgvJson) { throw "Generated wrapper changed provider argv; expected: $expectedArgvJson; actual: $actualArgvJson; batch content: $batch" }
   $exePath = Join-Path $env:SystemRoot 'System32\cmd.exe'
   $exeLaunch = New-ProviderLaunchInvocation -ProviderArgv ([string[]]@($exePath, '--version')) -SystemRoot $env:SystemRoot
   if ($exeLaunch.batch_path -or $exeLaunch.provider_argv.Count -ne 2 -or $exeLaunch.application_path -ne $exePath) { throw 'Expected executable argv to pass through unchanged' }
