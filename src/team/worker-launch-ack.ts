@@ -48,6 +48,7 @@ export function buildWindowsSupervisorSource(): string {
     'Write-WorkerLaunchStage "input-payload-read"',
     'if ($null -eq $payloadLine) { throw "worker_launch_authority_lost" }',
     'Write-WorkerLaunchStage "outer-payload-parse-started"',
+    'Write-WorkerLaunchStage ("outer-payload-length:" + $payloadLine.Length)',
     'try {',
     '  $payload = ConvertFrom-Json -InputObject $payloadLine',
     '  Write-WorkerLaunchStage "outer-payload-parse-complete"',
