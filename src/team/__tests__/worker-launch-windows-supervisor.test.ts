@@ -25,13 +25,15 @@ describe('generated Windows worker supervisor', () => {
     expect(source).toContain('exit_code=$exitCode');
     expect(source).toContain('New-ProviderLaunchInvocation');
     expect(source).toContain("Replace('%', '%%')");
+    expect(source).toContain('chcp 65001 >nul');
+    expect(source).toContain(String.raw` /s /c ""`);
     expect(source).toContain('start "" /b /wait');
   });
 
-  it.runIf(process.platform === 'win32')('compiles in PowerShell 5.1 and rejects unresolved or non-executable providers', () => {
+  it.runIf(process.platform === 'win32')('compiles in PowerShell 5.1 and launches a native batch provider through its generated wrapper', () => {
     // Parse the actual generated script, then execute only its Add-Type command.
-    // This catches both script delimiters and layered C# escaping without
-    // running the authority protocol or spawning a provider.
+    // This catches script delimiters and layered C# escaping, then exercises
+    // the generated cmd.exe command line against an isolated provider shim.
     const harness = String.raw`
 $ErrorActionPreference = 'Stop'
 if ($PSVersionTable.PSVersion.Major -ne 5 -or $PSVersionTable.PSVersion.Minor -ne 1) { throw 'Expected Windows PowerShell 5.1' }
@@ -45,36 +47,58 @@ Invoke-Expression $commands[0].Extent.Text
 $helpers = @($ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and ($node.Name -eq 'Quote-ProviderCmdArgument' -or $node.Name -eq 'New-ProviderLaunchInvocation') }, $true))
 if ($helpers.Count -ne 2) { throw 'Expected batch-provider wrapper helpers' }
 foreach ($helper in $helpers) { Invoke-Expression $helper.Extent.Text }
-$helperRoot = Join-Path $env:TEMP ('omc supervisor batch test ' + [guid]::NewGuid().ToString('N'))
+$originalTemp = $env:TEMP
+$helperRoot = Join-Path $env:TEMP ('omc supervisor batch test Ω ' + [guid]::NewGuid().ToString('N'))
 [IO.Directory]::CreateDirectory($helperRoot) | Out-Null
+$env:TEMP = $helperRoot
 $batchPath = $null
+$process = $null
 try {
   $providerPath = Join-Path $helperRoot 'codex.cmd'
-  [IO.File]::WriteAllText($providerPath, '@echo off')
-  $providerArgv = [string[]]@($providerPath, '100% ready', '%USERPROFILE%', 'bang!', 'caret^', 'say "hello" & continue', 'two words')
-  $launch = New-ProviderLaunchInvocation -ProviderArgv $providerArgv -SystemRoot $env:SystemRoot
+  $providerScript = '@echo off' + [char]13 + [char]10 + '"%OMC_TEST_NODE_EXE%" -e "require(''fs'').writeFileSync(process.argv[1],JSON.stringify(process.argv.slice(2)))" "%~dp0argv.json" %*' + [char]13 + [char]10 + 'exit /b 37' + [char]13 + [char]10
+  [IO.File]::WriteAllText($providerPath, $providerScript, [Text.Encoding]::ASCII)
+  $payloadArgv = [string[]]@('100% ready', '%USERPROFILE%', 'bang!', 'caret^', 'say "hello" & continue', 'two words', 'Grüße-λ-漢字')
+  $providerArgv = [string[]]@($providerPath) + $payloadArgv
+  $launch = New-ProviderLaunchInvocation -ProviderArgv $providerArgv -SystemRoot $env:SystemRoot -TempRoot $helperRoot -TempEnvironmentVariable 'TEMP'
   $batchPath = $launch.batch_path
-  if ($launch.provider_argv.Count -ne 6) { throw 'Expected cmd.exe wrapper argv' }
-  if ($launch.provider_argv[0] -ne (Join-Path $env:SystemRoot 'System32\cmd.exe')) { throw 'Expected absolute System32 cmd.exe' }
+  if ($launch.provider_argv.Count -ne 8) { throw 'Expected the validated provider argv to remain intact' }
+  if ($launch.application_path -ne (Join-Path $env:SystemRoot 'System32\cmd.exe')) { throw 'Expected absolute System32 cmd.exe' }
+  if ($launch.command_line -notmatch ' /s /c ""%TEMP%\\omc-worker-[0-9a-f]+\.cmd""$') { throw 'Expected cmd.exe /s /c quoting without CRT-escaped quotes' }
+  if ($launch.command_line.Contains('\\"')) { throw 'Expected cmd.exe command tail to avoid CRT quote escaping' }
   $batch = [IO.File]::ReadAllText($batchPath)
-  foreach ($literal in @('start "" /b /wait', '100%% ready', '%%USERPROFILE%%', 'bang!', 'caret^', 'say ""hello"" & continue', 'two words')) {
+  foreach ($literal in @('chcp 65001 >nul', 'start "" /b /wait', '100%% ready', '%%USERPROFILE%%', 'bang!', 'caret^', 'say ""hello"" & continue', 'two words', 'Grüße-λ-漢字')) {
     if (-not $batch.Contains($literal)) { throw "Batch wrapper lost literal argument: $literal" }
   }
+  $prefix = [O]::BuildCommandLine([string[]]@($launch.application_path))
+  if (-not $launch.command_line.StartsWith($prefix + ' ', [StringComparison]::Ordinal)) { throw 'Expected application path prefix in command line' }
+  $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+  $startInfo.FileName = $launch.application_path
+  $startInfo.Arguments = $launch.command_line.Substring($prefix.Length + 1)
+  $startInfo.WorkingDirectory = $helperRoot
+  $startInfo.UseShellExecute = $false
+  $startInfo.CreateNoWindow = $true
+  $process = [System.Diagnostics.Process]::Start($startInfo)
+  if (-not $process.WaitForExit(15000)) { $process.Kill(); throw 'Generated cmd.exe provider wrapper timed out' }
+  if ($process.ExitCode -ne 37) { throw "Expected provider exit code 37, got $($process.ExitCode)" }
+  $actualArgv = [IO.File]::ReadAllText((Join-Path $helperRoot 'argv.json')) | ConvertFrom-Json
+  if ((ConvertTo-Json -InputObject $actualArgv -Compress) -cne (ConvertTo-Json -InputObject $payloadArgv -Compress)) { throw 'Generated wrapper changed provider argv' }
   $exePath = Join-Path $env:SystemRoot 'System32\cmd.exe'
   $exeLaunch = New-ProviderLaunchInvocation -ProviderArgv ([string[]]@($exePath, '--version')) -SystemRoot $env:SystemRoot
-  if ($exeLaunch.batch_path -or $exeLaunch.provider_argv.Count -ne 2 -or $exeLaunch.provider_argv[0] -ne $exePath) { throw 'Expected executable argv to pass through unchanged' }
+  if ($exeLaunch.batch_path -or $exeLaunch.provider_argv.Count -ne 2 -or $exeLaunch.application_path -ne $exePath) { throw 'Expected executable argv to pass through unchanged' }
   $invalidPathRejected = $false
   try { $null = New-ProviderLaunchInvocation -ProviderArgv ([string[]]@('codex.cmd')) -SystemRoot $env:SystemRoot }
   catch { if ($_.Exception.Message -ne 'worker_launch_provider_executable_invalid') { throw }; $invalidPathRejected = $true }
   if (-not $invalidPathRejected) { throw 'Expected relative batch provider path to be rejected' }
   $invalidArgumentRejected = $false
   $invalidArgument = 'line' + [char]13 + [char]10 + 'two'
-  try { $null = New-ProviderLaunchInvocation -ProviderArgv ([string[]]@($providerPath, $invalidArgument)) -SystemRoot $env:SystemRoot }
+  try { $null = New-ProviderLaunchInvocation -ProviderArgv ([string[]]@($providerPath, $invalidArgument)) -SystemRoot $env:SystemRoot -TempRoot $helperRoot -TempEnvironmentVariable 'TEMP' }
   catch { if ($_.Exception.Message -ne 'worker_launch_provider_argv_invalid') { throw }; $invalidArgumentRejected = $true }
   if (-not $invalidArgumentRejected) { throw 'Expected CRLF-bearing batch argument to be rejected' }
 } finally {
+  if ($process) { if (-not $process.HasExited) { $process.Kill(); $process.WaitForExit() }; $process.Dispose() }
   if ($batchPath) { Remove-Item -LiteralPath $batchPath -Force -ErrorAction SilentlyContinue }
   Remove-Item -LiteralPath $helperRoot -Recurse -Force -ErrorAction SilentlyContinue
+  $env:TEMP = $originalTemp
 }
 $invalidProviders = @('codex', '.\codex.exe', 'C:codex.exe', '\codex.exe', ($env:SystemRoot + '\System32\codex.cmd'), ($env:SystemRoot + '\System32\codex'), ($env:SystemRoot + '\System32\omc-nonexistent-provider.exe'))
 foreach ($app in $invalidProviders) {
@@ -92,7 +116,7 @@ foreach ($app in $invalidProviders) {
     const output = execFileSync(
       join(process.env.SystemRoot!, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
       ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(harness, 'utf16le').toString('base64')],
-      { input: buildWindowsSupervisorSource(), encoding: 'utf8', windowsHide: true, timeout: 30_000 },
+      { input: buildWindowsSupervisorSource(), encoding: 'utf8', windowsHide: true, timeout: 30_000, env: { ...process.env, OMC_TEST_NODE_EXE: process.execPath } },
     );
     expect(JSON.parse(output.trim())).toBe(String.raw`"" "plain" "space value" "a\"b" "C:\dir with space\\"`);
   }, 35_000);

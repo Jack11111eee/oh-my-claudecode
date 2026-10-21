@@ -48,23 +48,27 @@ export function buildWindowsSupervisorSource(): string {
   return '"' + $value.Replace('%', '%%').Replace('"', '""') + '"'
 }
 function New-ProviderLaunchInvocation {
-  param([string[]]$ProviderArgv, [string]$SystemRoot)
+  param([string[]]$ProviderArgv, [string]$SystemRoot, [string]$TempRoot, [string]$TempEnvironmentVariable)
   if ($ProviderArgv.Count -eq 0) { throw "worker_launch_provider_argv_missing" }
   $providerPath = $ProviderArgv[0]
   if ([System.IO.Path]::GetExtension($providerPath) -notmatch '^\.(cmd|bat)$') {
-    return @{ provider_argv = $ProviderArgv; batch_path = $null }
+    return @{ provider_argv = $ProviderArgv; application_path = $providerPath; command_line = $null; batch_path = $null }
   }
   if (-not [regex]::IsMatch($providerPath, '^(?:[A-Za-z]:[\\/]|\\\\[^\\/]+[\\/][^\\/]+[\\/])')
       -or -not [System.IO.File]::Exists($providerPath)
-      -or -not [regex]::IsMatch($SystemRoot, '^[A-Za-z]:\\')) {
+      -or -not [regex]::IsMatch($SystemRoot, '^[A-Za-z]:\\')
+      -or $TempEnvironmentVariable -notin @('TEMP', 'TMP')
+      -or -not [System.IO.Path]::IsPathRooted($TempRoot)
+      -or -not [System.IO.Directory]::Exists($TempRoot)) {
     throw "worker_launch_provider_executable_invalid"
   }
   $cmdPath = [System.IO.Path]::Combine($SystemRoot, 'System32\cmd.exe')
   if (-not [System.IO.File]::Exists($cmdPath)) { throw "worker_launch_provider_executable_invalid" }
-  $batchPath = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), ('omc-worker-' + [Guid]::NewGuid().ToString('N') + '.cmd'))
+  $batchName = 'omc-worker-' + [Guid]::NewGuid().ToString('N') + '.cmd'
+  $batchPath = [System.IO.Path]::Combine($TempRoot, $batchName)
   $quotedArgv = @($ProviderArgv | ForEach-Object { Quote-ProviderCmdArgument ([string]$_) }) -join ' '
   $lineEnding = [string][char]13 + [char]10
-  $script = '@echo off' + $lineEnding + 'start "" /b /wait ' + $quotedArgv + $lineEnding
+  $script = '@echo off' + $lineEnding + 'for /f "tokens=2 delims=:" %%c in (''chcp'') do set "_OMC_OLD_CODEPAGE=%%c"' + $lineEnding + 'chcp 65001 >nul' + $lineEnding + 'start "" /b /wait ' + $quotedArgv + $lineEnding + 'set "_OMC_PROVIDER_EXIT=%ERRORLEVEL%"' + $lineEnding + 'if defined _OMC_OLD_CODEPAGE chcp %_OMC_OLD_CODEPAGE% >nul' + $lineEnding + 'exit /b %_OMC_PROVIDER_EXIT%' + $lineEnding
   $batchFile = [System.IO.File]::Open($batchPath, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
   try {
     $bytes = [System.Text.UTF8Encoding]::new($false).GetBytes($script)
@@ -77,7 +81,10 @@ function New-ProviderLaunchInvocation {
   } finally {
     if ($batchFile) { $batchFile.Dispose() }
   }
-  return @{ provider_argv = [string[]]@($cmdPath, '/d', '/v:off', '/s', '/c', ('"' + $batchPath + '"')); batch_path = $batchPath }
+  $batchCommand = '%' + $TempEnvironmentVariable + '%\' + $batchName
+  $commandPrefix = [O]::BuildCommandLine([string[]]@($cmdPath))
+  $commandLine = $commandPrefix + ' /d /v:off /s /c ""' + $batchCommand + '""'
+  return @{ provider_argv = $ProviderArgv; application_path = $cmdPath; command_line = $commandLine; batch_path = $batchPath }
 }`,
     'Add-Type @"',
     'using System; using System.Text; using System.Runtime.InteropServices;',
@@ -164,9 +171,9 @@ function New-ProviderLaunchInvocation {
     '"@',
     '$pi = New-Object O+PROCESS_INFORMATION; $job = [IntPtr]::Zero; $jobAssigned = $false; $envPtr = [IntPtr]::Zero; $cmd = $null; $batchPath = $null; $launchArgv = $null',
     'try {',
-    '  $launch = New-ProviderLaunchInvocation -ProviderArgv ([string[]]$authority.provider_argv) -SystemRoot ([string]$payload.provider_env.SystemRoot); $batchPath = $launch.batch_path; $launchArgv = [string[]]$launch.provider_argv; $cmd = [O]::BuildCommandLine($launchArgv)',
+    '  $tempEnvironmentVariable = "TEMP"; $tempRoot = [string]$payload.provider_env.TEMP; if ([string]::IsNullOrWhiteSpace($tempRoot)) { $tempEnvironmentVariable = "TMP"; $tempRoot = [string]$payload.provider_env.TMP }; $launch = New-ProviderLaunchInvocation -ProviderArgv ([string[]]$authority.provider_argv) -SystemRoot ([string]$payload.provider_env.SystemRoot) -TempRoot $tempRoot -TempEnvironmentVariable $tempEnvironmentVariable; $batchPath = $launch.batch_path; $launchArgv = [string[]]$launch.provider_argv; $cmd = if ($launch.command_line) { [string]$launch.command_line } else { [O]::BuildCommandLine($launchArgv) }',
     '  $envPairs = @($payload.provider_env.psobject.Properties | Sort-Object Name | ForEach-Object { "$($_.Name)=$($_.Value)" }); $envText = (($envPairs -join [char]0) + [char]0 + [char]0); $envBytes = [Text.Encoding]::Unicode.GetBytes($envText); $envPtr = [Runtime.InteropServices.Marshal]::AllocHGlobal($envBytes.Length); [Runtime.InteropServices.Marshal]::Copy($envBytes, 0, $envPtr, $envBytes.Length)',
-    '  [O]::CreateConsoleProcess([string]$launchArgv[0], $cmd, $envPtr, $payload.cwd, [ref]$pi)',
+    '  [O]::CreateConsoleProcess([string]$launch.application_path, $cmd, $envPtr, $payload.cwd, [ref]$pi)',
     '  $job = [O]::CreateJobObjectW([IntPtr]::Zero, $null); if ($job -eq [IntPtr]::Zero) { throw "worker_launch_create_job_failed" }; $info = New-Object O+JOBOBJECT_EXTENDED_LIMIT_INFORMATION; $info.BasicLimitInformation.LimitFlags = 0x2000; $ptr = [Runtime.InteropServices.Marshal]::AllocHGlobal([Runtime.InteropServices.Marshal]::SizeOf($info)); try { [Runtime.InteropServices.Marshal]::StructureToPtr($info, $ptr, $false); if (-not [O]::SetInformationJobObject($job, 9, $ptr, [Runtime.InteropServices.Marshal]::SizeOf($info))) { throw "worker_launch_job_config_failed" } } finally { [Runtime.InteropServices.Marshal]::FreeHGlobal($ptr) }; if (-not [O]::AssignProcessToJobObject($job, $pi.hProcess)) { throw "worker_launch_assign_job_failed" }; $jobAssigned = $true; if ([O]::ResumeThread($pi.hThread) -eq [uint32]::MaxValue) { throw "worker_launch_resume_failed" }',
     '  $ticks = ([DateTime]((Get-Process -Id $pi.dwProcessId).StartTime)).ToUniversalTime().Ticks; $ready = @{ protocol="' + WINDOWS_SUPERVISOR_PROTOCOL + '"; kind="ready"; attempt_id=$payload.identity.attempt_id; instance_id=$payload.identity.instance_id; authority_digest=$payload.authority_digest; containment_nonce=$payload.containment_nonce; pid=$pi.dwProcessId; process_start_identity=("ticks:" + $ticks) } | ConvertTo-Json -Compress; [Console]::Out.WriteLine($ready); [Console]::Out.Flush()',
     '  $readTask = [O]::ReadLineAsync(); while ($true) { if ([O]::WaitForSingleObject($pi.hProcess, 50) -eq 0) { $exitCode = [uint32]0; if (-not [O]::GetExitCodeProcess($pi.hProcess, [ref]$exitCode)) { throw "worker_launch_exit_code_failed" }; if (-not [O]::TerminateJobObject($job, $exitCode)) { throw "worker_launch_job_terminate_failed" }; if ([O]::WaitForSingleObject($job, 5000) -ne 0) { throw "worker_launch_job_cleanup_timeout" }; $terminal = @{ protocol="' + WINDOWS_SUPERVISOR_PROTOCOL + '"; kind="terminal"; attempt_id=$payload.identity.attempt_id; instance_id=$payload.identity.instance_id; authority_digest=$payload.authority_digest; containment_nonce=$payload.containment_nonce; pid=$pi.dwProcessId; outcome="exit"; cleanup_verified=$true; exit_code=$exitCode } | ConvertTo-Json -Compress; [Console]::Out.WriteLine($terminal); [Console]::Out.Flush(); break }; if (-not $readTask.IsCompleted) { continue }; $line = $readTask.Result; if ($null -eq $line) { throw "worker_launch_authority_lost" }; $readTask = [O]::ReadLineAsync(); if ([string]::IsNullOrWhiteSpace($line) -or $line.Length -gt 4096) { continue }; try { $msg = $line | ConvertFrom-Json } catch { continue }; if ($msg.protocol -ne "' + WINDOWS_SUPERVISOR_PROTOCOL + '" -or $msg.attempt_id -ne $payload.identity.attempt_id -or $msg.instance_id -ne $payload.identity.instance_id -or $msg.authority_digest -ne $payload.authority_digest -or $msg.containment_nonce -ne $payload.containment_nonce -or $msg.kind -ne "terminate") { continue }; if (-not [O]::TerminateJobObject($job, 1)) { throw "worker_launch_job_terminate_failed" }; if ([O]::WaitForSingleObject($job, 5000) -ne 0) { throw "worker_launch_job_cleanup_timeout" }; $terminal = @{ protocol="' + WINDOWS_SUPERVISOR_PROTOCOL + '"; kind="terminal"; attempt_id=$payload.identity.attempt_id; instance_id=$payload.identity.instance_id; authority_digest=$payload.authority_digest; containment_nonce=$payload.containment_nonce; pid=$pi.dwProcessId; outcome="terminated"; cleanup_verified=$true; exit_code=1 } | ConvertTo-Json -Compress; [Console]::Out.WriteLine($terminal); [Console]::Out.Flush(); break }',
