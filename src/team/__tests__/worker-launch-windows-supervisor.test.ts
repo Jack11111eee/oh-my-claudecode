@@ -71,8 +71,8 @@ describe('generated Windows worker supervisor', () => {
     }
     expect(source.indexOf('Write-WorkerLaunchStage "authority-validated"')).toBeGreaterThan(previousStage);
     expect(source).toContain('& $providerPath @providerArguments');
-    expect(source).toContain('[Console]::InputEncoding = $originalInputEncoding');
-    expect(source).toContain('[Console]::OutputEncoding = $originalOutputEncoding');
+    expect(source).not.toContain('[Console]::InputEncoding =');
+    expect(source).not.toContain('[Console]::OutputEncoding =');
     expect(source).not.toContain(' /d /v:off /s /c');
     expect(source).not.toContain('$nestedCommand');
     expect(source).toContain('GetProcessTimes(IntPtr process');
@@ -141,11 +141,6 @@ try {
   for ($i = 0; $i -lt $providerArgv.Count; $i++) {
     if ($decodedArgv[$i] -cne $providerArgv[$i]) { throw "Structured launcher changed provider argv at index $i" }
   }
-  $cleanupAnchor = '[Console]::OutputEncoding = $originalOutputEncoding'
-  if (-not $launcher.Contains($cleanupAnchor)) { throw 'Generated launcher lost code-page restoration' }
-  $cleanupCodePage = '  [IO.File]::WriteAllText((Join-Path $env:TEMP "cleanup.marker"), ([Console]::InputEncoding.CodePage.ToString() + "," + [Console]::OutputEncoding.CodePage.ToString()))'
-  $launcher = $launcher.Replace($cleanupAnchor, $cleanupAnchor + [char]10 + $cleanupCodePage)
-  [IO.File]::WriteAllText($launcherPath, $launcher, [Text.UTF8Encoding]::new($false))
   $expectedInputCodePage = [Console]::InputEncoding.CodePage
   $expectedOutputCodePage = [Console]::OutputEncoding.CodePage
   $prefix = [O]::BuildCommandLine([string[]]@($launch.application_path))
@@ -159,10 +154,7 @@ try {
   $process = [System.Diagnostics.Process]::Start($startInfo)
   if (-not $process.WaitForExit(15000)) { $process.Kill(); throw 'Generated PowerShell provider launcher timed out' }
   if ($process.ExitCode -ne 37) { throw "Expected provider exit code 37, got $($process.ExitCode); generated command line: $($launch.command_line)" }
-  $cleanupMarker = Join-Path $helperRoot 'cleanup.marker'
-  if (-not [IO.File]::Exists($cleanupMarker)) { throw 'Generated launcher did not reach cleanup after provider exit' }
-  $restoredCodePages = [IO.File]::ReadAllText($cleanupMarker).Split(',')
-  if ([int]$restoredCodePages[0] -ne $expectedInputCodePage -or [int]$restoredCodePages[1] -ne $expectedOutputCodePage) { throw "Generated launcher did not restore console code pages; expected: $expectedInputCodePage,$expectedOutputCodePage; actual: $($restoredCodePages -join ',')" }
+  if ([Console]::InputEncoding.CodePage -ne $expectedInputCodePage -or [Console]::OutputEncoding.CodePage -ne $expectedOutputCodePage) { throw 'Generated launcher changed shared console code pages' }
   $actualArgvEnvelope = ConvertFrom-Json -InputObject ([IO.File]::ReadAllText((Join-Path $helperRoot 'argv.json')))
   $actualArgv = [string[]]@($actualArgvEnvelope.argv)
   if ($actualArgv.Count -ne $payloadArgv.Count) { throw "Generated launcher changed provider argv count; expected: $($payloadArgv.Count); actual: $($actualArgv.Count)" }

@@ -97,18 +97,9 @@ $argvEnvelope = ConvertFrom-Json -InputObject ([Text.Encoding]::UTF8.GetString([
 $providerArgv = [string[]]@($argvEnvelope.argv)
 $providerPath = [string]$providerArgv[0]
 $providerArguments = [string[]]@($providerArgv | Select-Object -Skip 1)
-$originalInputEncoding = [Console]::InputEncoding
-$originalOutputEncoding = [Console]::OutputEncoding
 $exitCode = 1
-try {
-  [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
-  [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
-  & $providerPath @providerArguments
-  if ($null -eq $LASTEXITCODE) { $exitCode = 0 } else { $exitCode = [int]$LASTEXITCODE }
-} finally {
-  [Console]::InputEncoding = $originalInputEncoding
-  [Console]::OutputEncoding = $originalOutputEncoding
-}
+& $providerPath @providerArguments
+if ($null -eq $LASTEXITCODE) { $exitCode = 0 } else { $exitCode = [int]$LASTEXITCODE }
 exit $exitCode
 '@
   $script = $scriptTemplate.Replace('__COMSPEC_BASE64__', $commandShellBase64).Replace('__ARGV_BASE64__', $argvBase64)
