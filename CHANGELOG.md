@@ -1,3 +1,11 @@
+## [Unreleased]
+
+### Fixed
+
+- Submit team startup inboxes with Enter; shorten only overflowing Windows notifications while preserving launch markers.
+- Treat Codex folder-trust prompts as user-controlled and never type task text or grant trust through them.
+
+---
 # oh-my-claudecode v5.7.6: Fix plugin-mode HUD loading and tighten input validation
 
 ## Release Notes
@@ -72,7 +80,6 @@ Release with **1 new feature**, **22 bug fixes**, **1 CI improvement**, and **1 
 - **25 PRs merged** | **1 new feature** | **22 bug fixes** | **1 CI improvement** | **1 retired-tools removal**
 
 ---
-
 # oh-my-claudecode v5.7.4: More reliable hooks, team workflows, HUD, and Jev planning
 
 ## Release Notes
@@ -112,7 +119,6 @@ Release with **1 new feature**, **4 bug fixes**, **1 performance improvement**, 
 - **9 PRs merged** | **1 new feature** | **4 bug fixes** | **1 performance improvement** | **3 test improvements**
 
 ---
-
 # oh-my-claudecode v5.7.3: Retire agent variant names, parallel consensus reviews
 
 ## Release Notes
