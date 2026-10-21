@@ -229,16 +229,31 @@ describe('HUD marketplace resolution', () => {
     tempDirs.push(configDir);
 
     const fakeHome = join(configDir, 'home');
+    const outsideCwd = join(configDir, 'outside-cwd');
+    const npmPrefix = join(configDir, 'global-prefix');
+    const npmRoot = process.platform === 'win32'
+      ? join(npmPrefix, 'node_modules')
+      : join(npmPrefix, 'lib', 'node_modules');
     mkdirSync(fakeHome, { recursive: true });
+    mkdirSync(outsideCwd, { recursive: true });
 
     const sentinelPath = join(configDir, 'npm-package-loaded.txt');
-    const npmPackageRoot = join(configDir, 'node_modules', 'oh-my-claude-sisyphus');
+    const npmPackageRoot = join(npmRoot, 'oh-my-claude-sisyphus');
     const npmHudDir = join(npmPackageRoot, 'dist', 'hud');
     mkdirSync(npmHudDir, { recursive: true });
     writeFileSync(join(npmPackageRoot, 'package.json'), '{"type":"module"}\n');
     writeFileSync(
       join(npmHudDir, 'index.js'),
       `import { writeFileSync } from 'node:fs';\nwriteFileSync(${JSON.stringify(sentinelPath)}, 'npm-package-loaded');\n`
+    );
+
+    const brandedPackageRoot = join(npmRoot, 'oh-my-claudecode');
+    const brandedHudDir = join(brandedPackageRoot, 'dist', 'hud');
+    mkdirSync(brandedHudDir, { recursive: true });
+    writeFileSync(join(brandedPackageRoot, 'package.json'), '{"type":"module"}\n');
+    writeFileSync(
+      join(brandedHudDir, 'index.js'),
+      `import { writeFileSync } from 'node:fs';\nwriteFileSync(${JSON.stringify(join(configDir, 'branded-package-loaded.txt'))}, 'branded-package-loaded');\n`
     );
 
     execFileSync(process.execPath, [join(root, 'scripts', 'plugin-setup.mjs')], {
@@ -262,15 +277,17 @@ describe('HUD marketplace resolution', () => {
     );
 
     execFileSync(process.execPath, [hudScriptPath], {
-      cwd: root,
+      cwd: outsideCwd,
       env: {
         ...process.env,
         CLAUDE_CONFIG_DIR: configDir,
         HOME: fakeHome,
+        npm_config_prefix: npmPrefix,
       },
       stdio: 'pipe',
     });
 
     expect(readFileSync(sentinelPath, 'utf-8')).toBe('npm-package-loaded');
+    expect(existsSync(join(configDir, 'branded-package-loaded.txt'))).toBe(false);
   });
 });
