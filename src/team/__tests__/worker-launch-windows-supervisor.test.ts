@@ -93,6 +93,22 @@ try {
   try { $null = New-ProviderLaunchInvocation -ProviderArgv ([string[]]@($providerPath, $invalidArgument)) -SystemRoot $env:SystemRoot -TempRoot $helperRoot -TempEnvironmentVariable 'TEMP' }
   catch { if ($_.Exception.Message -ne 'worker_launch_provider_argv_invalid') { throw }; $invalidArgumentRejected = $true }
   if (-not $invalidArgumentRejected) { throw 'Expected CRLF-bearing batch argument to be rejected' }
+  $comPath = Join-Path $helperRoot 'codex.com'
+  [System.IO.File]::WriteAllText($comPath, 'not a native executable')
+  $comLaunch = New-ProviderLaunchInvocation -ProviderArgv ([string[]]@($comPath, '--version')) -SystemRoot $env:SystemRoot -TempRoot $helperRoot -TempEnvironmentVariable 'TEMP'
+  if ($comLaunch.batch_path -or $comLaunch.application_path -ne $comPath -or $comLaunch.provider_argv.Count -ne 2) { throw 'Expected .com provider argv to pass through unchanged' }
+  $comPi = New-Object O+PROCESS_INFORMATION
+  try { [O]::CreateConsoleProcess($comLaunch.application_path, ('"' + $comLaunch.application_path + '" --version'), [IntPtr]::Zero, $env:SystemRoot, [ref]$comPi) }
+  catch {
+    if ($_.Exception.InnerException -is [ArgumentException] -and $_.Exception.InnerException.Message -eq 'worker_launch_provider_executable_invalid') { throw 'Resolved .com provider was rejected before native process creation' }
+  } finally {
+    if ($comPi.hProcess -ne [IntPtr]::Zero) {
+      if (-not [O]::TerminateProcess($comPi.hProcess, 1)) { throw 'Failed to terminate .com validation test process' }
+      if ([O]::WaitForSingleObject($comPi.hProcess, 5000) -ne 0) { throw '.com validation test process did not terminate' }
+      [O]::CloseHandle($comPi.hProcess) | Out-Null
+    }
+    if ($comPi.hThread -ne [IntPtr]::Zero) { [O]::CloseHandle($comPi.hThread) | Out-Null }
+  }
 } finally {
   if ($process) { if (-not $process.HasExited) { $process.Kill(); $process.WaitForExit() }; $process.Dispose() }
   if ($batchPath) { Remove-Item -LiteralPath $batchPath -Force -ErrorAction SilentlyContinue }

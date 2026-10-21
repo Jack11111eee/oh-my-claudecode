@@ -115,9 +115,11 @@ function New-ProviderLaunchInvocation {
     pi = new PROCESS_INFORMATION();
     // lpApplicationName must never search a provider-controlled cwd or PATH.
     // Accept only an existing executable at a fully qualified Windows path.
+    string extension = String.IsNullOrWhiteSpace(app) ? String.Empty : System.IO.Path.GetExtension(app);
     if (String.IsNullOrWhiteSpace(app)
         || !System.Text.RegularExpressions.Regex.IsMatch(app, @"^(?:[A-Za-z]:[\\/]|\\\\[^\\/]+[\\/][^\\/]+[\\/])")
-        || !String.Equals(System.IO.Path.GetExtension(app), ".exe", StringComparison.OrdinalIgnoreCase)
+        || (!String.Equals(extension, ".exe", StringComparison.OrdinalIgnoreCase)
+          && !String.Equals(extension, ".com", StringComparison.OrdinalIgnoreCase))
         || !System.IO.File.Exists(app)) {
       throw new ArgumentException("worker_launch_provider_executable_invalid");
     }
