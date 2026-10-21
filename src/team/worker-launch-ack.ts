@@ -2419,7 +2419,7 @@ export async function runWorkerLaunchBootstrap(value: unknown): Promise<WorkerLa
               if (!windowsBootstrapPayloadSent) {
                 windowsBootstrapPayloadSent = true;
                 if (invocation.stdinPayload && child.stdin?.writable) {
-                  child.stdin.write(`${invocation.stdinPayload}\n`);
+                  child.stdin.write(`${invocation.stdinPayload}\r\n`);
                 }
               }
               continue;
