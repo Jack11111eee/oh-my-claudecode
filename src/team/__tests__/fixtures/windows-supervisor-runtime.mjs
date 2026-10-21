@@ -50,7 +50,7 @@ if (role === 'descendant') {
   const state = {
     controllerPid: process.pid, supervisorPid: child.pid, supervisorCommand: invocation.command,
     supervisorArgsPrefix: invocation.args.slice(0, -1), encodedCommandLength: invocation.args.at(-1)?.length,
-    stdinPayloadLength: Buffer.byteLength(invocation.stdinPayload + '\n'), stdinWriteAccepted: false,
+    stdinPayloadLength: Buffer.byteLength(invocation.stdinPayload + '\r\n'), stdinWriteAccepted: false,
     stdinBytesWritten: 0, stdinWriteCompleted: false, stdinReadyMarkerReceived: false,
     stdout: '', stderr: '', frames: [], errors, commands: [], closed: false,
   };
@@ -73,7 +73,7 @@ if (role === 'descendant') {
         state.stdinReadyMarkerReceived = true;
         if (!stdinPayloadWritten && child.stdin.writable) {
           stdinPayloadWritten = true;
-          state.stdinWriteAccepted = child.stdin.write(invocation.stdinPayload + '\n', error => {
+          state.stdinWriteAccepted = child.stdin.write(invocation.stdinPayload + '\r\n', error => {
             if (error) errors.push({ stream: 'stdin-write', code: error.code });
             state.stdinWriteCompleted = true;
             persist();
