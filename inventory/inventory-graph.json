@@ -36425,6 +36425,11 @@
         "path": "node:async_hooks"
       },
       {
+        "id": "external:node:buffer",
+        "kind": "external",
+        "path": "node:buffer"
+      },
+      {
         "id": "external:node:child_process",
         "kind": "external",
         "path": "node:child_process"
@@ -77778,6 +77783,11 @@
       },
       {
         "from": "src/team/__tests__/fixtures/windows-supervisor-runtime.mjs",
+        "to": "external:node:buffer",
+        "kind": "imports"
+      },
+      {
+        "from": "src/team/__tests__/fixtures/windows-supervisor-runtime.mjs",
         "to": "external:node:child_process",
         "kind": "imports"
       },
@@ -88643,9 +88653,9 @@
       }
     ],
     "stats": {
-      "nodeCount": 7730,
-      "edgeCount": 8580,
-      "importEdgeCount": 7139,
+      "nodeCount": 7731,
+      "edgeCount": 8581,
+      "importEdgeCount": 7140,
       "registerEdgeCount": 69
     }
   },

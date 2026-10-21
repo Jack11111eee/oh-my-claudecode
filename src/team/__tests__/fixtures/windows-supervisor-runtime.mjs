@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -45,7 +46,12 @@ if (role === 'descendant') {
   const child = spawn(invocation.command, invocation.args, {
     cwd: root, env: environment, stdio: ['pipe', 'pipe', 'pipe'],
   });
-  const state = { controllerPid: process.pid, supervisorPid: child.pid, stdout: '', stderr: '', frames: [], errors, commands: [], closed: false };
+  const state = {
+    controllerPid: process.pid, supervisorPid: child.pid, supervisorCommand: invocation.command,
+    supervisorArgsPrefix: invocation.args.slice(0, -1), encodedCommandLength: invocation.args.at(-1)?.length,
+    stdinPayloadLength: Buffer.byteLength(invocation.stdinPayload + '\n'), stdinWriteAccepted: false,
+    stdinBytesWritten: 0, stdinWriteCompleted: false, stdout: '', stderr: '', frames: [], errors, commands: [], closed: false,
+  };
   let pending = '';
   let sequence = -1;
   const persist = () => write('controller.json', state);
@@ -91,7 +97,13 @@ if (role === 'descendant') {
     persist();
   });
   persist();
-  child.stdin.write(invocation.stdinPayload + '\n');
+  state.stdinWriteAccepted = child.stdin.write(invocation.stdinPayload + '\n', error => {
+    if (error) errors.push({ stream: 'stdin-write', code: error.code });
+    state.stdinWriteCompleted = true;
+    persist();
+  });
+  state.stdinBytesWritten = child.stdin.bytesWritten;
+  persist();
 } else {
   throw new Error('Unknown Windows supervisor fixture role');
 }

@@ -38,7 +38,9 @@ const WINDOWS_SUPERVISOR_PROTOCOL = 'worker-launch-windows-supervisor-v1';
 export function buildWindowsSupervisorSource(): string {
   return [
     '$ErrorActionPreference = "Stop"',
-    '$payload = [Console]::In.ReadLine() | ConvertFrom-Json',
+    '$payloadLine = [System.Threading.Tasks.Task]::Run([System.Func[string]] { [Console]::In.ReadLine() }).GetAwaiter().GetResult()',
+    'if ($null -eq $payloadLine) { throw "worker_launch_authority_lost" }',
+    '$payload = $payloadLine | ConvertFrom-Json',
     '$json = $payload.canonical_json',
     '$hash = ([Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes($json)) | ForEach-Object { $_.ToString("x2") }) -join ""',
     'if ($hash -ne $payload.authority_digest) { throw "worker_launch_authority_digest_mismatch" }',

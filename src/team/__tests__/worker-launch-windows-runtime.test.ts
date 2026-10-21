@@ -30,7 +30,7 @@ const enabled = process.platform === 'win32' && Boolean(tmux && existsSync(tmux)
 const fixture = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'windows-supervisor-runtime.mjs');
 const protocol = 'worker-launch-windows-supervisor-v1';
 type Frame = { kind: string; pid: number; instance_id: string; attempt_id: string; authority_digest: string; containment_nonce: string; process_start_identity?: string; cleanup_verified?: boolean; exit_code?: number; outcome?: string; protocol: string };
-type State = { supervisorPid: number; controllerPid: number; stdout: string; stderr: string; frames: Frame[]; errors: { stream: string; code?: string }[]; commands: number[]; closed: boolean; exitCode?: number; partialStdout?: string };
+type State = { supervisorPid: number; controllerPid: number; supervisorCommand?: string; supervisorArgsPrefix?: string[]; encodedCommandLength?: number; stdinPayloadLength?: number; stdinWriteAccepted?: boolean; stdinBytesWritten?: number; stdinWriteCompleted?: boolean; stdout: string; stderr: string; frames: Frame[]; errors: { stream: string; code?: string }[]; commands: number[]; closed: boolean; exitCode?: number; partialStdout?: string };
 type Provider = { pid: number; descendantPid?: number; tty: boolean[] };
 
 async function json<T>(path: string): Promise<T | null> {
@@ -108,6 +108,14 @@ async function run(mode: 'exit' | 'terminate' | 'eof'): Promise<void> {
       const diagnostic = state ? JSON.stringify({
         closed: state.closed,
         exitCode: state.exitCode,
+        supervisorPid: state.supervisorPid,
+        supervisorCommand: state.supervisorCommand,
+        supervisorArgsPrefix: state.supervisorArgsPrefix,
+        encodedCommandLength: state.encodedCommandLength,
+        stdinPayloadLength: state.stdinPayloadLength,
+        stdinWriteAccepted: state.stdinWriteAccepted,
+        stdinBytesWritten: state.stdinBytesWritten,
+        stdinWriteCompleted: state.stdinWriteCompleted,
         frames: state.frames,
         errors: state.errors,
         stdout: state.stdout.slice(-2000),

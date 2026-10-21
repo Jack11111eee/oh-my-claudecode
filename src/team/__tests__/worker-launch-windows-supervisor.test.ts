@@ -16,6 +16,7 @@ describe('generated Windows worker supervisor', () => {
     expect(source).toContain('[O]::ReadLineAsync()');
     expect(source).toContain('Task.Run(() => Console.In.ReadLine())');
     expect(source).not.toContain('[Console]::In.ReadLineAsync()');
+    expect(source).toContain('[System.Threading.Tasks.Task]::Run([System.Func[string]]');
     expect(source).toContain('CreateFileW("CONIN$",');
     expect(source).toContain('CreateFileW("CONOUT$",');
     expect(source).toContain('new IntPtr(0x20002)');
@@ -81,14 +82,13 @@ try {
   $process = [System.Diagnostics.Process]::Start($startInfo)
   if (-not $process.WaitForExit(15000)) { $process.Kill(); throw 'Generated cmd.exe provider wrapper timed out' }
   if ($process.ExitCode -ne 37) { throw "Expected provider exit code 37, got $($process.ExitCode); generated command line: $($launch.command_line); expanded command line: $($launch.command_line.Replace('%TEMP%', $helperRoot)); batch content: $batch" }
-  # PowerShell 5.1 ConvertTo-Json serializes a ConvertFrom-Json array as {"value":[...],"Count":n},
-  # so compare the decoded strings element by element instead of their re-serialized JSON.
-  $actualArgv = [string[]]([IO.File]::ReadAllText((Join-Path $helperRoot 'argv.json')) | ConvertFrom-Json)
-  $actualArgvJson = ConvertTo-Json -InputObject $actualArgv -Compress
-  $expectedArgvJson = ConvertTo-Json -InputObject $payloadArgv -Compress
-  $argvMatches = $actualArgv.Count -eq $payloadArgv.Count
-  for ($i = 0; $argvMatches -and $i -lt $payloadArgv.Count; $i++) { if ($actualArgv[$i] -cne $payloadArgv[$i]) { $argvMatches = $false } }
-  if (-not $argvMatches) { throw "Generated wrapper changed provider argv; expected: $expectedArgvJson; actual: $actualArgvJson; batch content: $batch" }
+  $actualArgv = [IO.File]::ReadAllText((Join-Path $helperRoot 'argv.json')) | ConvertFrom-Json
+  if ($actualArgv.PSObject.Properties.Name -contains 'value' -and $actualArgv.PSObject.Properties.Name -contains 'Count') { $actualArgv = $actualArgv.value }
+  $actualArgv = @($actualArgv)
+  if ($actualArgv.Count -ne $payloadArgv.Count) { throw "Generated wrapper changed provider argv count; expected: $($payloadArgv.Count); actual: $($actualArgv.Count); batch content: $batch" }
+  for ($i = 0; $i -lt $payloadArgv.Count; $i++) {
+    if ([string]$actualArgv[$i] -cne [string]$payloadArgv[$i]) { throw "Generated wrapper changed provider argv at index $i; expected: $($payloadArgv[$i]); actual: $($actualArgv[$i]); batch content: $batch" }
+  }
   $exePath = Join-Path $env:SystemRoot 'System32\cmd.exe'
   $exeLaunch = New-ProviderLaunchInvocation -ProviderArgv ([string[]]@($exePath, '--version')) -SystemRoot $env:SystemRoot
   if ($exeLaunch.batch_path -or $exeLaunch.provider_argv.Count -ne 2 -or $exeLaunch.application_path -ne $exePath) { throw 'Expected executable argv to pass through unchanged' }
