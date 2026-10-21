@@ -40,7 +40,7 @@ if ($PSVersionTable.PSVersion.Major -ne 5 -or $PSVersionTable.PSVersion.Minor -n
 $source = [Console]::In.ReadToEnd()
 $tokens = $null; $errors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseInput($source, [ref]$tokens, [ref]$errors)
-if ($errors.Count -ne 0) { throw (($errors | ForEach-Object { $_.Message }) -join '; ') }
+if ($errors.Count -ne 0) { $diagnostics = $errors | ForEach-Object { "line $($_.Extent.StartLineNumber):$($_.Extent.StartColumnNumber) $($_.Message)" }; throw ($diagnostics -join '; ') }
 $commands = @($ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq 'Add-Type' }, $true))
 if ($commands.Count -ne 1) { throw 'Expected exactly one embedded Add-Type command' }
 Invoke-Expression $commands[0].Extent.Text
@@ -76,7 +76,6 @@ try {
   $startInfo.Arguments = $launch.command_line.Substring($prefix.Length + 1)
   $startInfo.WorkingDirectory = $helperRoot
   $startInfo.UseShellExecute = $false
-  $startInfo.CreateNoWindow = $true
   $process = [System.Diagnostics.Process]::Start($startInfo)
   if (-not $process.WaitForExit(15000)) { $process.Kill(); throw 'Generated cmd.exe provider wrapper timed out' }
   if ($process.ExitCode -ne 37) { throw "Expected provider exit code 37, got $($process.ExitCode)" }

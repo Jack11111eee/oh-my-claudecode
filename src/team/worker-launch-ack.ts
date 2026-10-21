@@ -44,7 +44,7 @@ export function buildWindowsSupervisorSource(): string {
     'if ($hash -ne $payload.authority_digest) { throw "worker_launch_authority_digest_mismatch" }',
     '$authority = $json | ConvertFrom-Json; if ($authority.provider_argv.Count -ne $payload.provider_argv.Count) { throw "worker_launch_authority_argv_mismatch" }; for ($i = 0; $i -lt $authority.provider_argv.Count; $i++) { if ([string]$authority.provider_argv[$i] -cne [string]$payload.provider_argv[$i]) { throw "worker_launch_authority_argv_mismatch" } }',
     String.raw`function Quote-ProviderCmdArgument([string]$value) {
-  if ($value.IndexOf([char]13) -ge 0 -or $value.IndexOf([char]10) -ge 0) { throw "worker_launch_provider_argv_invalid" }
+  if ($value.IndexOf([char]0) -ge 0 -or $value.IndexOf([char]13) -ge 0 -or $value.IndexOf([char]10) -ge 0) { throw "worker_launch_provider_argv_invalid" }
   return '"' + $value.Replace('%', '%%').Replace('"', '""') + '"'
 }
 function New-ProviderLaunchInvocation {
@@ -54,21 +54,15 @@ function New-ProviderLaunchInvocation {
   if ([System.IO.Path]::GetExtension($providerPath) -notmatch '^\.(cmd|bat)$') {
     return @{ provider_argv = $ProviderArgv; application_path = $providerPath; command_line = $null; batch_path = $null }
   }
-  if (-not [regex]::IsMatch($providerPath, '^(?:[A-Za-z]:[\\/]|\\\\[^\\/]+[\\/][^\\/]+[\\/])')
-      -or -not [System.IO.File]::Exists($providerPath)
-      -or -not [regex]::IsMatch($SystemRoot, '^[A-Za-z]:\\')
-      -or $TempEnvironmentVariable -notin @('TEMP', 'TMP')
-      -or -not [System.IO.Path]::IsPathRooted($TempRoot)
-      -or -not [System.IO.Directory]::Exists($TempRoot)) {
-    throw "worker_launch_provider_executable_invalid"
-  }
+  if (-not [regex]::IsMatch($providerPath, '^(?:[A-Za-z]:[\\/]|\\\\[^\\/]+[\\/][^\\/]+[\\/])') -or -not [System.IO.File]::Exists($providerPath) -or -not [regex]::IsMatch($SystemRoot, '^[A-Za-z]:\\') -or ($TempEnvironmentVariable -ne 'TEMP' -and $TempEnvironmentVariable -ne 'TMP') -or -not [System.IO.Path]::IsPathRooted($TempRoot) -or -not [System.IO.Directory]::Exists($TempRoot)) { throw "worker_launch_provider_executable_invalid" }
   $cmdPath = [System.IO.Path]::Combine($SystemRoot, 'System32\cmd.exe')
   if (-not [System.IO.File]::Exists($cmdPath)) { throw "worker_launch_provider_executable_invalid" }
   $batchName = 'omc-worker-' + [Guid]::NewGuid().ToString('N') + '.cmd'
   $batchPath = [System.IO.Path]::Combine($TempRoot, $batchName)
   $quotedArgv = @($ProviderArgv | ForEach-Object { Quote-ProviderCmdArgument ([string]$_) }) -join ' '
   $lineEnding = [string][char]13 + [char]10
-  $script = '@echo off' + $lineEnding + 'for /f "tokens=2 delims=:" %%c in (''chcp'') do set "_OMC_OLD_CODEPAGE=%%c"' + $lineEnding + 'chcp 65001 >nul' + $lineEnding + 'start "" /b /wait ' + $quotedArgv + $lineEnding + 'set "_OMC_PROVIDER_EXIT=%ERRORLEVEL%"' + $lineEnding + 'if defined _OMC_OLD_CODEPAGE chcp %_OMC_OLD_CODEPAGE% >nul' + $lineEnding + 'exit /b %_OMC_PROVIDER_EXIT%' + $lineEnding
+  $codePageCapture = 'for /f "tokens=2 delims=:" %%c in (' + [char]39 + 'chcp' + [char]39 + ') do set "_OMC_OLD_CODEPAGE=%%c"'
+  $script = '@echo off' + $lineEnding + $codePageCapture + $lineEnding + 'chcp 65001 >nul' + $lineEnding + 'start "" /b /wait ' + $quotedArgv + $lineEnding + 'set "_OMC_PROVIDER_EXIT=%ERRORLEVEL%"' + $lineEnding + 'if defined _OMC_OLD_CODEPAGE chcp %_OMC_OLD_CODEPAGE% >nul' + $lineEnding + 'exit /b %_OMC_PROVIDER_EXIT%' + $lineEnding
   $batchFile = [System.IO.File]::Open($batchPath, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
   try {
     $bytes = [System.Text.UTF8Encoding]::new($false).GetBytes($script)
