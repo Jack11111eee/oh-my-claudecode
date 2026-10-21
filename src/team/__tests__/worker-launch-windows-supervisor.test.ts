@@ -63,7 +63,7 @@ try {
   $batchPath = $launch.batch_path
   if ($launch.provider_argv.Count -ne 8) { throw 'Expected the validated provider argv to remain intact' }
   if ($launch.application_path -ne (Join-Path $env:SystemRoot 'System32\cmd.exe')) { throw 'Expected absolute System32 cmd.exe' }
-  if ($launch.command_line -notmatch ' /s /c """%TEMP%\\\\omc-worker-[0-9a-f]+\\\\.cmd"""$') { throw 'Expected cmd.exe /s /c quoting without CRT-escaped quotes' }
+  if ($launch.command_line -notmatch ' /s /c ""%TEMP%\\omc-worker-[0-9a-f]+\.cmd""$') { throw 'Expected cmd.exe /s /c quoting without CRT-escaped quotes' }
   if ($launch.command_line.Contains('\\"')) { throw 'Expected cmd.exe command tail to avoid CRT quote escaping' }
   $batch = [IO.File]::ReadAllText($batchPath)
   foreach ($literal in @('chcp 65001 >nul', 'start "" /b /wait', '100%% ready', '%%USERPROFILE%%', 'bang!', 'caret^', 'say ""hello"" & continue', 'two words', 'Grüße-λ-漢字')) {
