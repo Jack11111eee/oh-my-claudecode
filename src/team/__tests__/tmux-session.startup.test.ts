@@ -683,6 +683,19 @@ describe('worker pane startup safety', () => {
       'automatically, even without a model request.',
       'Continue only if you trust these files. Your',
       'trust decision will be saved.',
+      'Review the files in this folder before continuing.',
+      'Folder settings may allow code to run automatically.',
+      'Only proceed when you recognize and trust this project.',
+      'Trust applies to the current workspace folder.',
+      'The selected choice is saved for future sessions.',
+      'You can quit now and inspect the folder first.',
+      'Folder access may include reading project files.',
+      'Folder access may include editing project files.',
+      'Review any automated actions before granting access.',
+      'Do not continue if the folder is unfamiliar.',
+      'The trust decision should reflect your own judgment.',
+      'You can return after reviewing the project contents.',
+      'This prompt requires an explicit user decision.',
       '› 1. Trust and continue', '  2. Quit',
       'enter continue · esc quit',
     ].join('\n');
@@ -699,6 +712,20 @@ describe('worker pane startup safety', () => {
     await expect(sendToWorker('', '%2', 'List files and report the result.', context.ownership.tmuxServerIdentity))
       .resolves.toBe(false);
     expect(tmuxState.args.some(args => args.includes('send-keys'))).toBe(false);
+
+    const staleCapture = [
+      'Trust this folder?', '› 1. Trust and continue', '  2. Quit',
+      'The old folder prompt was dismissed.',
+      'Recent output line one.', 'Recent output line two.',
+      'Recent output line three.', 'Recent output line four.',
+      'Recent output line five.', 'Recent output line six.',
+      'Recent output line seven.', 'Recent output line eight.',
+      'Recent output line nine.', 'Recent output line ten.',
+      'Recent output line eleven.', 'Recent output line twelve.',
+      '› ready',
+    ].join('\n');
+    expect(paneHasTrustPrompt(staleCapture, 'codex')).toBe(false);
+    expect(paneLooksReady(staleCapture, 'codex')).toBe(true);
   });
 
   strictTmuxIt.each([
