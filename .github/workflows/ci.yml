@@ -90,6 +90,23 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install pinned psmux for native runtime tests
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP 'psmux-v3.4.0-windows-x64.zip'
+          $destination = Join-Path $env:RUNNER_TEMP 'psmux-v3.4.0'
+          Invoke-WebRequest -UseBasicParsing `
+            -Uri 'https://github.com/psmux/psmux/releases/download/v3.4.0/psmux-v3.4.0-windows-x64.zip' `
+            -OutFile $archive
+          $actualHash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actualHash -ne 'a66b6be7c13c6fa0dc3660a267b9e34eaa91a4eb7f07fbd55a0468018bd0f721') {
+            throw "psmux v3.4.0 archive SHA-256 mismatch: $actualHash"
+          }
+          New-Item -ItemType Directory -Path $destination -Force | Out-Null
+          Expand-Archive -LiteralPath $archive -DestinationPath $destination -Force
+          if (-not (Test-Path -LiteralPath (Join-Path $destination 'psmux.exe') -PathType Leaf)) {
+            throw 'psmux.exe was not found at the archive root'
+          }
+
       # Scoped to the cross-platform path/encoding suites on a real Windows
       # runner. The ubuntu-only `test` job exercises POSIX separators, so
       # forward-slash assumptions in project-dir encoding and worktree
@@ -97,12 +114,12 @@ jobs:
       # the full `npm test` suite here is not yet possible: it has pre-existing
       # platform-specific failures on Windows (e.g. python-repl sandbox, lsp
       # devcontainer, session-end path interpolation) that are out of scope for
-      # this gate. Keep this list in sync with the path-handling test files.
+      # this gate. Keep the path-handling entries and supervisor suite in sync.
       # run.cjs supervisor/stdio contract tests (#3920) must run here: leaked
       # protocol handles and process-tree reap are Windows-hosted failures.
       # The native worker supervisor also requires Windows PowerShell 5.1 to
       # validate its generated PowerShell and embedded C# source.
-      - name: Run Windows path-handling tests
+      - name: Run Windows path and supervisor tests
         run: >-
           npx vitest run --fileParallelism=false
           src/utils/__tests__/encode-project-path.test.ts
@@ -123,6 +140,9 @@ jobs:
           src/installer/__tests__/claude-md-transaction.test.ts
           src/team/__tests__/cli-detection.windows.integration.test.ts
           src/team/__tests__/worker-launch-windows-supervisor.test.ts
+          src/team/__tests__/worker-launch-windows-runtime.test.ts
+        env:
+          OMC_WINDOWS_TEST_TMUX_BINARY: ${{ runner.temp }}\psmux-v3.4.0\psmux.exe
 
       - name: Run Windows legacy state-lock tests
         run: >-

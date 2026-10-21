@@ -77,7 +77,9 @@ function New-ProviderLaunchInvocation {
   }
   $batchCommand = '%' + $TempEnvironmentVariable + '%\' + $batchName
   $commandPrefix = [O]::BuildCommandLine([string[]]@($cmdPath))
-  $commandLine = $commandPrefix + ' /d /v:off /s /c ""' + $batchCommand + '""'
+  # /s strips the command string's outer quotes; CALL then receives the
+  # wrapper path as one quoted argument after the TEMP/TMP expansion.
+  $commandLine = $commandPrefix + ' /d /v:off /s /c "call "' + $batchCommand + '""'
   return @{ provider_argv = $ProviderArgv; application_path = $cmdPath; command_line = $commandLine; batch_path = $batchPath }
 }`,
     'Add-Type @"',

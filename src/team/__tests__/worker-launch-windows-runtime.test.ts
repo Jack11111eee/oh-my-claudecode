@@ -11,6 +11,21 @@ import { getProcessStartIdentitySync, isProcessIdentityLive } from '../../platfo
 import { buildWindowsSupervisorInvocation, buildWindowsSupervisorSource, type WorkerLaunchBootstrapSpec } from '../worker-launch-ack.js';
 
 const tmux = process.env.OMC_WINDOWS_TEST_TMUX_BINARY;
+const windowsCi = process.platform === 'win32' && Boolean(process.env.CI);
+if (windowsCi) {
+  if (!tmux || !existsSync(tmux)) {
+    throw new Error('Windows CI requires OMC_WINDOWS_TEST_TMUX_BINARY to point to the provisioned psmux.exe');
+  }
+  let version: string;
+  try {
+    version = execFileSync(tmux, ['-V'], { encoding: 'utf8', timeout: 5_000, windowsHide: true });
+  } catch (error) {
+    throw new Error(`Windows CI could not execute OMC_WINDOWS_TEST_TMUX_BINARY: ${String(error)}`);
+  }
+  if (!/\b(?:psmux|tmux)\b/i.test(version)) {
+    throw new Error(`Windows CI configured binary does not identify as psmux/tmux: ${version.trim() || '(empty output)'}`);
+  }
+}
 const enabled = process.platform === 'win32' && Boolean(tmux && existsSync(tmux));
 const fixture = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'windows-supervisor-runtime.mjs');
 const protocol = 'worker-launch-windows-supervisor-v1';
