@@ -84,12 +84,16 @@ async function run(mode: 'exit' | 'terminate' | 'eof'): Promise<void> {
     identity, provider_argv: spec.provider_argv, provider_env: {}, cwd: root,
   })).digest('hex');
   const invocation = buildWindowsSupervisorInvocation(spec, providerEnvironment);
-  expect(invocation.env.PSModulePath).toBe(`${providerEnvironment.SystemRoot}\\System32\\WindowsPowerShell\\v1.0\\Modules`);
-  const payload = JSON.parse(invocation.stdinPayload) as { provider_env: Record<string, string> };
+  const supervisorEnvironment = invocation.env;
+  if (!supervisorEnvironment) throw new Error('worker_launch_test_supervisor_environment_missing');
+  const stdinPayload = invocation.stdinPayload;
+  if (typeof stdinPayload !== 'string') throw new Error('worker_launch_test_supervisor_payload_missing');
+  expect(supervisorEnvironment.PSModulePath).toBe(`${providerEnvironment.SystemRoot}\\System32\\WindowsPowerShell\\v1.0\\Modules`);
+  const payload = JSON.parse(stdinPayload) as { provider_env: Record<string, string> };
   expect(payload.provider_env).not.toHaveProperty('PSModulePath');
   expect(invocation.command.length + invocation.args.join(' ').length + 16).toBeLessThan(32_767);
   // Launch PowerShell with its supervisor-only module path, not the provider environment.
-  await writeFile(join(root, 'invocation.json'), JSON.stringify({ invocation: { command: invocation.command, args: invocation.args, stdinPayload: invocation.stdinPayload }, environment: invocation.env }));
+  await writeFile(join(root, 'invocation.json'), JSON.stringify({ invocation: { command: invocation.command, args: invocation.args, stdinPayload }, environment: supervisorEnvironment }));
   const command = (...args: string[]) => execFileSync(tmux!, ['-L', socket, '-f', join(root, 'psmux.conf'), ...args], {
     env: environment, cwd: root, encoding: 'utf8', timeout: 15_000, windowsHide: true,
   });
