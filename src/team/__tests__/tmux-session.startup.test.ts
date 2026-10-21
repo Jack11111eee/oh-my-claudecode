@@ -734,6 +734,30 @@ describe('worker pane startup safety', () => {
     expect(tmuxState.args.some(args => args.includes('send-keys'))).toBe(false);
   });
 
+  strictTmuxIt('does not press Enter if Codex trust appears after direct text injection', async () => {
+    const context = await acceptedContext('codex');
+    const message = 'List files and report the result.';
+    const trustSelector = [
+      'Folder access', 'D:\\test\\repo',
+      'Trust this folder? Codex can read, edit, and',
+      'run files here, subject to your permission',
+      'settings. Folder settings can run code',
+      'automatically, even without a model request.',
+      '› 1. Trust and continue', '  2. Quit',
+    ].join('\n');
+    tmuxState.args = [];
+    tmuxState.captures = ['› ready\n', trustSelector];
+
+    await expect(sendToWorker('', context.ownership.paneId, message, context.ownership.tmuxServerIdentity))
+      .resolves.toBe(false);
+
+    const literalInputs = tmuxState.args
+      .filter(args => args[0] === 'send-keys' && args.includes('-l'))
+      .map(args => args.at(-1));
+    expect(literalInputs).toEqual([message]);
+    expect(tmuxState.args.some(args => args[0] === 'send-keys' && args.at(-1) === 'Enter')).toBe(false);
+  });
+
   strictTmuxIt.each([
     ['Do you trust the files in this folder?', 'Yes, proceed'],
     ['Quick safety check: Is this a project you created or one you trust?', 'Yes, I trust this folder'],

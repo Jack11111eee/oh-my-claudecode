@@ -1179,6 +1179,19 @@ export async function invokeDirectMailboxEffect(
               cause: 'returned_false',
             };
       }
+      const postInputBlockReason = await paneInputBlockReason(
+        target.paneId,
+        tmuxServerIdentity,
+        dependencies.serverIdentityDependencies,
+      );
+      if (postInputBlockReason) {
+        return {
+          kind: 'attempted_unconfirmed',
+          transport: 'tmux_send_keys',
+          reason: 'notification_delivery_uncertain',
+          cause: 'returned_false',
+        };
+      }
       const enter = await runGuardedNativeTmuxCommand(
         tmuxServerIdentity,
         tmuxCommandString(['send-keys', '-t', target.paneId, 'Enter']),
@@ -3270,6 +3283,7 @@ async function guardedSendLiteralAndEnter(
     tmuxCommandString(['send-keys', '-t', paneId, '-l', '--', text]),
   );
   if (literal.outcome !== 'executed') return false;
+  if (await paneInputBlockReason(paneId, tmuxServerIdentity)) return false;
   const enter = await runGuardedNativeTmuxCommand(
     tmuxServerIdentity,
     tmuxCommandString(['send-keys', '-t', paneId, 'Enter']),
