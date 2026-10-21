@@ -97,10 +97,24 @@ async function run(mode: 'exit' | 'terminate' | 'eof'): Promise<void> {
     const initial = await waitFor(() => json<State>(join(root, 'controller.json')), 'controller started');
     capture(initial.supervisorPid);
     capture(initial.controllerPid);
-    const readyState = await waitFor(async () => {
-      const value = await json<State>(join(root, 'controller.json'));
-      return value?.frames.some(frame => frame.kind === 'ready') ? value : null;
-    }, 'ready frame');
+    let readyState: State;
+    try {
+      readyState = await waitFor(async () => {
+        const value = await json<State>(join(root, 'controller.json'));
+        return value?.frames.some(frame => frame.kind === 'ready') ? value : null;
+      }, 'ready frame');
+    } catch (error) {
+      const state = await json<State>(join(root, 'controller.json'));
+      const diagnostic = state ? JSON.stringify({
+        closed: state.closed,
+        exitCode: state.exitCode,
+        frames: state.frames,
+        errors: state.errors,
+        stdout: state.stdout.slice(-2000),
+        stderr: state.stderr.slice(-4000),
+      }) : 'controller state unavailable';
+      throw new Error(`${error instanceof Error ? error.message : String(error)}; ${diagnostic}`);
+    }
     const ready = readyState.frames.find(frame => frame.kind === 'ready')!;
     expect(ready).toMatchObject({ protocol, attempt_id: identity.attempt_id, instance_id: identity.instance_id, authority_digest: spec.authority_digest, containment_nonce: spec.containment_nonce });
     expect(capture(ready.pid)).toBe(ready.process_start_identity);

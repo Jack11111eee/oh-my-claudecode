@@ -27,6 +27,7 @@ describe('generated Windows worker supervisor', () => {
     expect(source).toContain("Replace('%', '%%')");
     expect(source).toContain('chcp 65001 >nul');
     expect(source).toContain(String.raw` /s /c ""`);
+
   });
 
   it.runIf(process.platform === 'win32')('compiles in PowerShell 5.1 and launches a native batch provider through its generated wrapper', () => {
