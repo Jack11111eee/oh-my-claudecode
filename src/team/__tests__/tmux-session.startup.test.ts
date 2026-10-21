@@ -715,13 +715,6 @@ describe('worker pane startup safety', () => {
 
     const staleCapture = [
       'Trust this folder?', '› 1. Trust and continue', '  2. Quit',
-      'The old folder prompt was dismissed.',
-      'Recent output line one.', 'Recent output line two.',
-      'Recent output line three.', 'Recent output line four.',
-      'Recent output line five.', 'Recent output line six.',
-      'Recent output line seven.', 'Recent output line eight.',
-      'Recent output line nine.', 'Recent output line ten.',
-      'Recent output line eleven.', 'Recent output line twelve.',
       '› ready',
     ].join('\n');
     expect(paneHasTrustPrompt(staleCapture, 'codex')).toBe(false);

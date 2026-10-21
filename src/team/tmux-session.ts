@@ -3331,10 +3331,13 @@ type PaneTrustPromptKind = 'directory' | 'claude_directory' | 'codex_directory' 
 function detectPaneTrustPromptKind(captured: string, provider?: CliAgentType): PaneTrustPromptKind | null {
   const lines = captured.split('\n').map(l => l.replace(/\r/g, '').trim()).filter(l => l.length > 0);
   const tail = lines.slice(-12);
+  const lastCodexPromptIndex = lines.findLastIndex(line => paneLineLooksLikeIdlePrompt(line, 'codex'));
+  const lastCodexPromptIsTrustChoice = lastCodexPromptIndex >= 0
+    && /\b1\.\s*Trust and continue\b/i.test(lines[lastCodexPromptIndex]!);
 
   if ((provider === undefined || provider === 'codex')
     && lines.some(line => /^Trust this folder\?/i.test(line))
-    && tail.some(line => /\b1\.\s*Trust and continue\b/i.test(line))
+    && lastCodexPromptIsTrustChoice
     && tail.some(line => /\b2\.\s*Quit\b/i.test(line))) {
     return 'codex_directory';
   }
