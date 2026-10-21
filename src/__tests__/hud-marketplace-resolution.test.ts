@@ -183,6 +183,7 @@ describe('HUD marketplace resolution', () => {
     const npmPrefix = join(configDir, 'global-prefix');
     mkdirSync(fakeHome, { recursive: true });
     mkdirSync(outsideCwd, { recursive: true });
+    writeFileSync(join(fakeHome, '.npmrc'), `prefix=${npmPrefix.replace(/\\/g, '/')}\n`);
 
     const sentinelPath = join(configDir, 'global-prefix-loaded.txt');
     const npmRoot = process.platform === 'win32'
@@ -216,7 +217,8 @@ describe('HUD marketplace resolution', () => {
         ...process.env,
         CLAUDE_CONFIG_DIR: configDir,
         HOME: fakeHome,
-        npm_config_prefix: npmPrefix,
+        USERPROFILE: fakeHome,
+        PREFIX: '',
       },
       stdio: 'pipe',
     });
@@ -236,6 +238,7 @@ describe('HUD marketplace resolution', () => {
       : join(npmPrefix, 'lib', 'node_modules');
     mkdirSync(fakeHome, { recursive: true });
     mkdirSync(outsideCwd, { recursive: true });
+    writeFileSync(join(fakeHome, '.npmrc'), `prefix=${npmPrefix.replace(/\\/g, '/')}\n`);
 
     const sentinelPath = join(configDir, 'npm-package-loaded.txt');
     const npmPackageRoot = join(npmRoot, 'oh-my-claude-sisyphus');
@@ -282,7 +285,8 @@ describe('HUD marketplace resolution', () => {
         ...process.env,
         CLAUDE_CONFIG_DIR: configDir,
         HOME: fakeHome,
-        npm_config_prefix: npmPrefix,
+        USERPROFILE: fakeHome,
+        PREFIX: '',
       },
       stdio: 'pipe',
     });

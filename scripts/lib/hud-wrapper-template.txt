@@ -46,7 +46,6 @@ function getGlobalNodeModuleRoots() {
     roots.push(join(prefix, "node_modules"));
   };
 
-  addPrefixRoots(process.env.npm_config_prefix);
   addPrefixRoots(process.env.PREFIX);
 
   // The Node install prefix is a global npm prefix for nvm/fnm users whose hook PATH lacks npm.
@@ -59,10 +58,17 @@ function getGlobalNodeModuleRoots() {
   }
 
   try {
+    // npm scripts export project .npmrc values as npm_config_*; keep them out of global-root discovery.
+    const npmEnv = { ...process.env };
+    for (const key of Object.keys(npmEnv)) {
+      if (key.toLowerCase().startsWith("npm_config_")) delete npmEnv[key];
+    }
+
     const isWin = process.platform === "win32";
     const npmCommand = isWin ? "npm.cmd" : "npm";
     const npmRoot = String(execFileSync(npmCommand, ["root", "-g"], {
       encoding: "utf8",
+      env: npmEnv,
       stdio: ["ignore", "pipe", "ignore"],
       timeout: 1500,
       cwd: homedir(),

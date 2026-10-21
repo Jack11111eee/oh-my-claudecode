@@ -269,23 +269,48 @@ describe('HUD wrapper — OMC_PLUGIN_ROOT resolution', () => {
     expect(result.stdout).toContain('[OMC HUD] Plugin not installed.');
   });
 
+  it('does not trust an absolute npm_config_prefix exported by the project', () => {
+    const s = staged!;
+    const projectDir = join(s.dir, 'untrusted-project');
+    const cwd = join(projectDir, 'nested');
+    const projectNpmPrefix = join(projectDir, 'npm-prefix');
+    mkdirSync(cwd, { recursive: true });
+    writeHudPackage(
+      join(projectNpmPrefix, 'lib', 'node_modules'),
+      'oh-my-claude-sisyphus',
+      'FROM_PROJECT_NPM_CONFIG_PREFIX',
+    );
+
+    const result = runWrapper(s.wrapperPath, scrubbedEnv({
+      CLAUDE_CONFIG_DIR: join(s.dir, 'isolated-config-project-prefix'),
+      npm_config_prefix: projectNpmPrefix,
+    }), cwd);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).not.toContain('FROM_PROJECT_NPM_CONFIG_PREFIX');
+  });
+
   it('loads a global npm-prefix install and reports an earlier load failure once', () => {
     const s = staged!;
     const pluginRoot = join(s.dir, 'broken-plugin-root');
     const pluginHudDir = join(pluginRoot, 'dist', 'hud');
     const globalPrefix = join(s.dir, 'global-npm-prefix');
+    const fakeHome = join(s.dir, 'global-home');
     const globalNodeModules = process.platform === 'win32'
       ? join(globalPrefix, 'node_modules')
       : join(globalPrefix, 'lib', 'node_modules');
     const failingHudPath = join(pluginHudDir, 'index.js');
     mkdirSync(pluginHudDir, { recursive: true });
+    mkdirSync(fakeHome, { recursive: true });
     writeFileSync(failingHudPath, 'throw new Error("plugin root import failed");\n', 'utf8');
     writeHudPackage(globalNodeModules, 'oh-my-claude-sisyphus', 'FROM_GLOBAL_NPM_PREFIX');
 
     const result = runWrapper(s.wrapperPath, scrubbedEnv({
       CLAUDE_CONFIG_DIR: join(s.dir, 'isolated-config-global-fallback'),
+      HOME: fakeHome,
+      USERPROFILE: fakeHome,
       [OMC_PLUGIN_ROOT_ENV]: pluginRoot,
-      npm_config_prefix: globalPrefix,
+      PREFIX: globalPrefix,
     }));
 
     expect(result.status).toBe(0);
