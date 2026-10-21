@@ -13,8 +13,13 @@ describe('generated Windows worker supervisor', () => {
     expect(source).toContain(String.raw`if (c == '\\')`);
     expect(source).toContain('[uint32]::MaxValue');
     expect(source).not.toContain('[uint32]0xffffffff');
+    expect(source).toContain('System.Console.SetIn(new System.IO.StreamReader(System.Console.OpenStandardInput(), new System.Text.UTF8Encoding(false), true))');
     expect(source).toContain('[O]::ReadLineAsync()');
     expect(source).toContain('Task.Run(() => Console.In.ReadLine())');
+    const initializeInput = source.indexOf('[WorkerLaunchInput]::Initialize()');
+    expect(initializeInput).toBeGreaterThan(-1);
+    expect(initializeInput).toBeLessThan(source.indexOf('$payloadLine = [WorkerLaunchInput]::ReadLineAsync()'));
+    expect(initializeInput).toBeLessThan(source.indexOf('$readTask = [O]::ReadLineAsync()'));
     expect(source).toContain('$payloadLine = [WorkerLaunchInput]::ReadLineAsync().GetAwaiter().GetResult()');
     expect(source).not.toContain('[System.Threading.Tasks.Task]::Run([System.Func[string]]');
     expect(source).toContain('CreateFileW("CONIN$",');
@@ -26,6 +31,7 @@ describe('generated Windows worker supervisor', () => {
     expect(source).toContain('exit_code=$exitCode');
     expect(source).toContain('New-ProviderLaunchInvocation');
     expect(source).toContain("Replace('%', '%%%%')");
+    expect(source).toContain("Replace('^', '^^^^')");
     expect(source).toContain('chcp 65001 >nul');
     expect(source).toContain(String.raw` /s /c ""`);
 
@@ -67,7 +73,7 @@ try {
   if ($launch.command_line -notmatch ' /s /c ""%TEMP%\\omc-worker-[0-9a-f]+\.cmd""$') { throw "Expected cmd.exe /s /c quoting without CRT-escaped quotes; command line: $($launch.command_line)" }
   if ($launch.command_line.Contains('\\"')) { throw 'Expected cmd.exe command tail to avoid CRT quote escaping' }
   $batch = [IO.File]::ReadAllText($batchPath)
-  foreach ($literal in @('chcp 65001 >nul', '100%%%% ready', '%%%%USERPROFILE%%%%', 'bang!', 'caret^', 'say ""hello"" & continue', 'two words', 'Grüße-λ-漢字')) {
+  foreach ($literal in @('chcp 65001 >nul', '100%%%% ready', '%%%%USERPROFILE%%%%', 'bang!', 'caret^^^^', 'say ""hello"" & continue', 'two words', 'Grüße-λ-漢字')) {
     if (-not $batch.Contains($literal)) { throw "Batch wrapper lost literal argument: $literal; batch content: $batch" }
   }
   $cleanupAnchor = 'if defined _OMC_OLD_CODEPAGE chcp %_OMC_OLD_CODEPAGE% >nul'

@@ -39,8 +39,9 @@ export function buildWindowsSupervisorSource(): string {
   return [
     '$ErrorActionPreference = "Stop"',
     'Add-Type @"',
-    'public static class WorkerLaunchInput { public static System.Threading.Tasks.Task<string> ReadLineAsync() { return System.Threading.Tasks.Task.Run(() => System.Console.In.ReadLine()); } }',
+    'public static class WorkerLaunchInput { public static void Initialize() { System.Console.SetIn(new System.IO.StreamReader(System.Console.OpenStandardInput(), new System.Text.UTF8Encoding(false), true)); } public static System.Threading.Tasks.Task<string> ReadLineAsync() { return System.Threading.Tasks.Task.Run(() => System.Console.In.ReadLine()); } }',
     '"@',
+    '[WorkerLaunchInput]::Initialize()',
     '$payloadLine = [WorkerLaunchInput]::ReadLineAsync().GetAwaiter().GetResult()',
     'if ($null -eq $payloadLine) { throw "worker_launch_authority_lost" }',
     '$payload = $payloadLine | ConvertFrom-Json',
@@ -50,7 +51,7 @@ export function buildWindowsSupervisorSource(): string {
     '$authority = $json | ConvertFrom-Json; if ($authority.provider_argv.Count -ne $payload.provider_argv.Count) { throw "worker_launch_authority_argv_mismatch" }; for ($i = 0; $i -lt $authority.provider_argv.Count; $i++) { if ([string]$authority.provider_argv[$i] -cne [string]$payload.provider_argv[$i]) { throw "worker_launch_authority_argv_mismatch" } }',
     String.raw`function Quote-ProviderCmdArgument([string]$value) {
   if ($value.IndexOf([char]0) -ge 0 -or $value.IndexOf([char]13) -ge 0 -or $value.IndexOf([char]10) -ge 0) { throw "worker_launch_provider_argv_invalid" }
-  return '"' + $value.Replace('%', '%%%%').Replace('"', '""') + '"'
+  return '"' + $value.Replace('%', '%%%%').Replace('"', '""').Replace('^', '^^^^') + '"'
 }
 function New-ProviderLaunchInvocation {
   param([string[]]$ProviderArgv, [string]$SystemRoot, [string]$TempRoot, [string]$TempEnvironmentVariable)
@@ -1355,9 +1356,14 @@ async function readWorkerLaunchCleanupProof(
     const value = completed.value as Partial<WorkerLaunchIdentity> & Record<string, unknown>;
     const matchesStarted = !started || (value.pid === started.pid
       && value.process_start_identity === started.process_start_identity);
+    const matchesTerminationAuthority = !('authority_digest' in attempt)
+      || (value.authority_digest === attempt.authority_digest
+        && value.containment_nonce === attempt.containment_nonce
+        && (value.outcome === 'terminated' || value.outcome === 'exit'));
     if (matchesStarted && identityMatches(value, attempt) && value.kind === 'worker_launch_termination_complete'
       && value.cleanup_verified === true && Number.isSafeInteger(value.pid) && Number(value.pid) > 0
       && isValidProcessStartIdentity(value.process_start_identity)
+      && matchesTerminationAuthority
       && matchesProcessGroup(value)) return true;
   }
   return false;
@@ -2024,21 +2030,39 @@ export function buildProviderSpawnInvocation(
 
 async function awaitExternalTerminationCompletion(
   spec: WorkerLaunchBootstrapSpec,
+  started: { pid: number; process_start_identity: string },
   timeoutMs: number = 2_000,
 ): Promise<boolean> {
+  if (!isPositiveProcessId(started.pid) || !isValidProcessStartIdentity(started.process_start_identity)) return false;
+
   const request = await readJson(`${spec.started_path}.termination-request`);
-  if (request.kind !== 'value' || !identityMatches(request.value as Partial<WorkerLaunchIdentity>, spec)
-    || (request.value as Record<string, unknown>).containment_nonce !== spec.containment_nonce
-    || (request.value as Record<string, unknown>).authority_digest !== spec.authority_digest) return false;
+  if (request.kind !== 'value' || !identityMatches(request.value, spec)) return false;
+  const requestRecord = request.value as Record<string, unknown>;
+  if (requestRecord.kind !== 'worker_launch_termination_request'
+    || requestRecord.operation !== 'terminate'
+    || requestRecord.pid !== started.pid
+    || !isPositiveProcessId(requestRecord.pid)
+    || requestRecord.process_start_identity !== started.process_start_identity
+    || !isValidProcessStartIdentity(requestRecord.process_start_identity)
+    || requestRecord.containment_nonce !== spec.containment_nonce
+    || requestRecord.authority_digest !== spec.authority_digest) return false;
 
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const completed = await readJson(`${spec.started_path}.termination-complete`);
-    if (completed.kind === 'value'
-      && identityMatches(completed.value as Partial<WorkerLaunchIdentity>, spec)
-      && (completed.value as { cleanup_verified?: unknown }).cleanup_verified === true
-      && (completed.value as Record<string, unknown>).authority_digest === spec.authority_digest
-      && (completed.value as Record<string, unknown>).containment_nonce === spec.containment_nonce) return true;
+    if (completed.kind === 'value') {
+      if (!identityMatches(completed.value, spec)) return false;
+      const completedRecord = completed.value as Record<string, unknown>;
+      return completedRecord.kind === 'worker_launch_termination_complete'
+        && completedRecord.cleanup_verified === true
+        && completedRecord.pid === started.pid
+        && isPositiveProcessId(completedRecord.pid)
+        && completedRecord.process_start_identity === started.process_start_identity
+        && isValidProcessStartIdentity(completedRecord.process_start_identity)
+        && completedRecord.authority_digest === spec.authority_digest
+        && completedRecord.containment_nonce === spec.containment_nonce
+        && (completedRecord.outcome === 'terminated' || completedRecord.outcome === 'exit');
+    }
     if (completed.kind === 'malformed') return false;
     await sleep(10);
   }
@@ -2394,6 +2418,12 @@ export async function runWorkerLaunchBootstrap(value: unknown): Promise<WorkerLa
           const windowsTerminationProofWritten = process.platform === 'win32'
             ? windowsTerminationProofWrite === null || await windowsTerminationProofWrite
             : false;
+          const startedProviderIdentity = providerPid !== null
+            && isPositiveProcessId(providerPid)
+            && providerStartIdentity !== null
+            && isValidProcessStartIdentity(providerStartIdentity)
+            ? { pid: providerPid, process_start_identity: providerStartIdentity }
+            : null;
           const groupAbsent = launchGroup !== null
             && await waitForProcessGroupAbsence(launchGroup.processGroupId, Date.now() + 2_000);
           // Windows cleanup remains bound to the supervisor/Job completion
@@ -2402,7 +2432,9 @@ export async function runWorkerLaunchBootstrap(value: unknown): Promise<WorkerLa
           // no captured group is safe only when no release was attempted.
           const cleanupVerified = process.platform === 'win32'
             ? windowsTerminationProofWritten
-              && (await awaitExternalTerminationCompletion(spec) || await readWorkerLaunchCleanupProof(spec))
+              && startedProviderIdentity !== null
+              && (await awaitExternalTerminationCompletion(spec, startedProviderIdentity)
+                || await readWorkerLaunchCleanupProof(spec, startedProviderIdentity))
             : (launchGroup !== null && groupAbsent) || (gateAborted && launchGroup === null);
           await writeTerminal({
             ...identityOf(spec), kind: 'worker_launch_provider_terminal',

@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { execFileSync, spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
+import { EventEmitter } from 'node:events';
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
+import { PassThrough } from 'node:stream';
 
 import * as processUtils from '../../platform/process-utils.js';
 import {
@@ -2957,6 +2959,155 @@ describe('worker launch acknowledgement', () => {
       vi.resetModules();
     }
   });
+
+  const invalidWindowsTerminationRecords: Array<{
+    description: string;
+    target: 'request' | 'completion';
+    malformed?: boolean;
+    field?: string;
+    replacement?: unknown;
+    omitField?: boolean;
+  }> = [
+    { description: 'malformed request', target: 'request', malformed: true },
+    { description: 'wrong-kind request', target: 'request', field: 'kind', replacement: 'not_a_termination_request' },
+    { description: 'wrong-operation request', target: 'request', field: 'operation', replacement: 'kill' },
+    { description: 'wrong-PID request', target: 'request', field: 'pid', replacement: 1 },
+    { description: 'wrong-start-identity request', target: 'request', field: 'process_start_identity', replacement: 'linux:1' },
+    { description: 'invalid-start-identity request', target: 'request', field: 'process_start_identity', replacement: 'invalid' },
+    { description: 'wrong-authority request', target: 'request', field: 'authority_digest', replacement: 'forged-digest' },
+    { description: 'wrong-containment request', target: 'request', field: 'containment_nonce', replacement: randomUUID() },
+    { description: 'wrong-kind completion', target: 'completion', field: 'kind', replacement: 'not_a_termination_complete' },
+    { description: 'wrong-PID completion', target: 'completion', field: 'pid', replacement: 1 },
+    { description: 'wrong-start-identity completion', target: 'completion', field: 'process_start_identity', replacement: 'linux:1' },
+    { description: 'invalid-start-identity completion', target: 'completion', field: 'process_start_identity', replacement: 'invalid' },
+    { description: 'wrong-authority completion', target: 'completion', field: 'authority_digest', replacement: 'forged-digest' },
+    { description: 'wrong-containment completion', target: 'completion', field: 'containment_nonce', replacement: randomUUID() },
+    { description: 'identity-only completion without authority', target: 'completion', field: 'authority_digest', omitField: true },
+    { description: 'unverified completion', target: 'completion', field: 'cleanup_verified', replacement: false },
+    { description: 'invalid-outcome completion', target: 'completion', field: 'outcome', replacement: 'cleanup_unverified' },
+    { description: 'missing-outcome completion', target: 'completion', field: 'outcome', omitField: true },
+    { description: 'malformed completion', target: 'completion', malformed: true },
+  ];
+
+  it.each(invalidWindowsTerminationRecords)(
+    'does not accept $description as cleanup proof for a still-running provider',
+    async scenario => {
+      const launchAttempt = await attempt();
+      const expected = JSON.parse(await readFile(launchAttempt.expectedPath, 'utf8')) as Record<string, unknown>;
+      const spec = buildWorkerLaunchBootstrapSpec(launchAttempt, ['codex'], cwd);
+      const providerPid = process.pid;
+      const processStartIdentity = await getProcessStartIdentity(providerPid);
+      if (!processStartIdentity) throw new Error('worker_launch_test_process_identity_missing');
+      const originalSystemRoot = process.env.SystemRoot;
+
+      vi.resetModules();
+      const actualChildProcess = await vi.importActual<typeof import('node:child_process')>('node:child_process');
+      const fakeChild = Object.assign(new EventEmitter(), {
+        pid: providerPid + 100_000,
+        stdin: new PassThrough(),
+        stdout: new PassThrough(),
+        stderr: new PassThrough(),
+      });
+      const spawnMock = vi.fn(() => {
+        setImmediate(() => {
+          fakeChild.emit('spawn');
+          fakeChild.stdout.write(`${JSON.stringify({
+            protocol: 'worker-launch-windows-supervisor-v1',
+            kind: 'ready',
+            attempt_id: spec.attempt_id,
+            instance_id: spec.instance_id,
+            authority_digest: spec.authority_digest,
+            containment_nonce: spec.containment_nonce,
+            pid: providerPid,
+            process_start_identity: processStartIdentity,
+          })}\n`);
+        });
+        return fakeChild as unknown as ReturnType<typeof spawn>;
+      });
+      vi.doMock('node:child_process', () => ({ ...actualChildProcess, spawn: spawnMock }));
+      const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
+      let bootstrap: Promise<Awaited<ReturnType<typeof runWorkerLaunchBootstrap>>> | undefined;
+      let result: Awaited<ReturnType<typeof runWorkerLaunchBootstrap>> | undefined;
+      try {
+        process.env.SystemRoot = 'C:\\Windows';
+        Object.defineProperty(process, 'platform', { value: 'win32' });
+        const workerLaunch = await import('../worker-launch-ack.js');
+        bootstrap = workerLaunch.runWorkerLaunchBootstrap(spec);
+        await expect(workerLaunch.awaitWorkerLaunchAcknowledgement(launchAttempt, {
+          timeoutMs: LAUNCH_WAIT_TIMEOUT_MS,
+          pollIntervalMs: 5,
+        })).resolves.toEqual({ ok: true });
+        await expect.poll(async () => {
+          try {
+            return (JSON.parse(await readFile(launchAttempt.startedPath, 'utf8')) as Record<string, unknown>).kind;
+          } catch {
+            return undefined;
+          }
+        }, { timeout: LAUNCH_WAIT_TIMEOUT_MS, interval: 5 }).toBe('worker_launch_provider_started');
+
+        const requestPath = `${launchAttempt.startedPath}.termination-request`;
+        const completionPath = `${launchAttempt.startedPath}.termination-complete`;
+        const request: Record<string, unknown> = {
+          ...expected,
+          kind: 'worker_launch_termination_request',
+          operation: 'terminate',
+          pid: providerPid,
+          process_start_identity: processStartIdentity,
+          authority_digest: spec.authority_digest,
+          containment_nonce: spec.containment_nonce,
+        };
+        const completion: Record<string, unknown> = {
+          ...expected,
+          kind: 'worker_launch_termination_complete',
+          cleanup_verified: true,
+          pid: providerPid,
+          process_start_identity: processStartIdentity,
+          authority_digest: spec.authority_digest,
+          containment_nonce: spec.containment_nonce,
+          outcome: 'terminated',
+        };
+        const proof = scenario.target === 'request' ? request : completion;
+        const proofPath = scenario.target === 'request' ? requestPath : completionPath;
+        if (scenario.malformed) {
+          await writeFile(proofPath, '{', 'utf8');
+        } else {
+          if (scenario.field) {
+            if (scenario.omitField) delete proof[scenario.field];
+            else if (scenario.field === 'pid') proof.pid = providerPid === 1 ? 2 : 1;
+            else if (scenario.field === 'process_start_identity' && scenario.replacement === 'linux:1') {
+              proof.process_start_identity = processStartIdentity === 'linux:1' ? 'linux:2' : 'linux:1';
+            } else proof[scenario.field] = scenario.replacement;
+          }
+          await writeFile(proofPath, JSON.stringify(proof), 'utf8');
+        }
+        if (scenario.target === 'completion') {
+          await writeFile(requestPath, JSON.stringify(request), 'utf8');
+        }
+
+        fakeChild.emit('close', 0, null);
+        result = await bootstrap;
+      } finally {
+        if (originalPlatform) Object.defineProperty(process, 'platform', originalPlatform);
+        if (originalSystemRoot === undefined) delete process.env.SystemRoot;
+        else process.env.SystemRoot = originalSystemRoot;
+        if (bootstrap && !result) {
+          fakeChild.emit('close', 0, null);
+          await bootstrap.catch(() => undefined);
+        }
+        fakeChild.stdin.destroy();
+        fakeChild.stdout.destroy();
+        fakeChild.stderr.destroy();
+        vi.doUnmock('node:child_process');
+        vi.resetModules();
+      }
+
+      expect(result).toEqual({ outcome: 'provider_cleanup_unverified' });
+      expect(result?.outcome).not.toBe('ran');
+      expect(isProcessAlive(providerPid)).toBe(true);
+      const terminal = JSON.parse(await readFile(`${launchAttempt.startedPath}.terminal`, 'utf8')) as Record<string, unknown>;
+      expect(terminal).toMatchObject({ outcome: 'cleanup_unverified', cleanup_verified: false });
+    },
+  );
 
   it('quotes exact Windows CreateProcess arguments', () => {
     expect(quoteWindowsCreateProcessArgument('')).toBe('""');
