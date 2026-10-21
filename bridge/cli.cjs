@@ -43891,6 +43891,104 @@ function parseTomlKey(value) {
   const parsed = parseTomlQuotedString(trimmed);
   return parsed && parsed.trim().length > 0 ? parsed : void 0;
 }
+function parseTomlDottedKey(value) {
+  const keys = [];
+  let index = 0;
+  const skipWhitespace = () => {
+    while (value[index] === " " || value[index] === "	") {
+      index++;
+    }
+  };
+  skipWhitespace();
+  while (index < value.length) {
+    const start = index;
+    const quote = value[index];
+    if (quote === '"') {
+      index++;
+      let closed = false;
+      while (index < value.length) {
+        if (value[index] === "\\") {
+          index += 2;
+        } else if (value[index++] === '"') {
+          closed = true;
+          break;
+        }
+      }
+      if (!closed) {
+        return void 0;
+      }
+    } else if (quote === "'") {
+      index++;
+      while (index < value.length && value[index] !== "'") {
+        index++;
+      }
+      if (index >= value.length) {
+        return void 0;
+      }
+      index++;
+    } else {
+      while (index < value.length && value[index] !== "." && value[index] !== " " && value[index] !== "	") {
+        index++;
+      }
+    }
+    const key = parseTomlKey(value.slice(start, index));
+    if (!key) {
+      return void 0;
+    }
+    keys.push(key);
+    skipWhitespace();
+    if (index === value.length) {
+      return keys;
+    }
+    if (value[index] !== ".") {
+      return void 0;
+    }
+    index++;
+    skipWhitespace();
+    if (index === value.length) {
+      return void 0;
+    }
+  }
+  return void 0;
+}
+function parseTomlTableHeader(line) {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith("[") || trimmed.startsWith("[[")) {
+    return void 0;
+  }
+  let quote;
+  let escaped = false;
+  let closingBracket = -1;
+  for (let index = 1; index < trimmed.length; index++) {
+    const character = trimmed[index];
+    if (quote === '"') {
+      if (escaped) {
+        escaped = false;
+      } else if (character === "\\") {
+        escaped = true;
+      } else if (character === '"') {
+        quote = void 0;
+      }
+      continue;
+    }
+    if (quote === "'") {
+      if (character === "'") {
+        quote = void 0;
+      }
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+    } else if (character === "]") {
+      closingBracket = index;
+      break;
+    }
+  }
+  if (closingBracket < 0 || trimmed.slice(closingBracket + 1).trim() && !trimmed.slice(closingBracket + 1).trimStart().startsWith("#")) {
+    return void 0;
+  }
+  return parseTomlDottedKey(trimmed.slice(1, closingBracket));
+}
 function renderTomlStringMapInline(values) {
   const entries = Object.entries(values).sort(([left], [right]) => left.localeCompare(right)).map(([key, value]) => `${renderTomlBareKey(key)} = ${renderTomlString(value)}`);
   return `{ ${entries.join(", ")} }`;
@@ -43957,10 +44055,10 @@ function parseCodexMcpServerNames(content) {
     if (!line || line.startsWith("#")) {
       continue;
     }
-    const sectionMatch = line.match(/^\[mcp_servers\.([^\]]+)\]$/);
-    if (sectionMatch) {
-      const name = sectionMatch[1].trim();
-      if (name && CODEX_MCP_SERVER_NAME_PATTERN.test(name)) {
+    const tableKeys = parseTomlTableHeader(line);
+    if (tableKeys?.[0] === "mcp_servers" && tableKeys.length >= 2) {
+      const name = tableKeys[1];
+      if (CODEX_MCP_SERVER_NAME_PATTERN.test(name)) {
         names.add(name);
       }
     }
@@ -44034,23 +44132,28 @@ function parseCodexMcpRegistryEntries(content) {
     if (!line || line.startsWith("#")) {
       continue;
     }
-    const headersSectionMatch = line.match(/^\[mcp_servers\.([^\]]+)\.headers\]$/);
-    if (headersSectionMatch) {
-      const name = headersSectionMatch[1].trim();
-      if (!currentName || currentName !== name) {
+    const tableKeys = parseTomlTableHeader(line);
+    if (tableKeys) {
+      const name = tableKeys[0] === "mcp_servers" ? tableKeys[1] : void 0;
+      if (name && CODEX_MCP_SERVER_NAME_PATTERN.test(name) && tableKeys.length === 3 && tableKeys[2] === "headers") {
+        if (!currentName || currentName !== name) {
+          flushCurrent();
+          currentName = name;
+          currentEntry = {};
+        }
+        currentSection = "headers";
+      } else if (name && CODEX_MCP_SERVER_NAME_PATTERN.test(name) && tableKeys.length === 2) {
         flushCurrent();
         currentName = name;
         currentEntry = {};
+        currentSection = "server";
+      } else {
+        flushCurrent();
       }
-      currentSection = "headers";
       continue;
     }
-    const sectionMatch = line.match(/^\[mcp_servers\.([^\]]+)\]$/);
-    if (sectionMatch) {
+    if (line.startsWith("[[")) {
       flushCurrent();
-      currentName = sectionMatch[1].trim();
-      currentEntry = {};
-      currentSection = "server";
       continue;
     }
     if (!currentName || !currentSection) {
@@ -65635,9 +65738,11 @@ async function readShutdownAck(teamName, workerName, cwd2, requestedAfter) {
   const ack = await readJsonSafe3(
     absPath(cwd2, TeamPaths.shutdownAck(teamName, workerName))
   );
-  if (!ack) return null;
-  if (requestedAfter && ack.updated_at) {
-    if (new Date(ack.updated_at).getTime() < new Date(requestedAfter).getTime()) {
+  if (!isRecord4(ack) || ack.status !== "accept" && ack.status !== "reject") return null;
+  if (ack.reason !== void 0 && typeof ack.reason !== "string" || ack.updated_at !== void 0 && !isTimestamp2(ack.updated_at)) return null;
+  if (requestedAfter !== void 0) {
+    if (!isTimestamp2(requestedAfter) || ack.updated_at === void 0) return null;
+    if (Date.parse(ack.updated_at) < Date.parse(requestedAfter)) {
       return null;
     }
   }
@@ -127638,6 +127743,7 @@ function buildPerStoryClaudeGoalInstruction(goal, plan) {
     `Goal: ${goal.id} \u2014 ${goal.title}`,
     "",
     "Claude /goal integration constraints (model-facing \u2014 OMC cannot mutate Claude /goal state from a shell):",
+    "- If `omc` is not on PATH on a plugin-only install, replace the `omc` prefix in these commands with `oh-my-claudecode.js` or `node <plugin-root>/bin/oh-my-claudecode.js`.",
     "- First confirm the active Claude /goal for this session; if none is active, invoke /goal <condition> with the payload below. If you cannot invoke /goal in this session (e.g. standalone Claude Code), ask the user to type it and wait; --claude-goal-json reconciles the ledger only and does not satisfy the PreToolUse /goal guard.",
     "- If a different active Claude /goal exists, finish or clear that /goal before starting this ultragoal.",
     "- If the active /goal is a different completed legacy goal and the Claude session refuses to set a new /goal, continue this ultragoal in a fresh Claude Code session (same repo/worktree) and invoke /goal there.",
@@ -127670,6 +127776,7 @@ function buildAggregateClaudeGoalInstruction(goal, plan) {
     `Goal: ${goal.id} \u2014 ${goal.title}`,
     "",
     "Claude /goal integration constraints (model-facing \u2014 OMC cannot mutate Claude /goal state from a shell):",
+    "- If `omc` is not on PATH on a plugin-only install, replace the `omc` prefix in these commands with `oh-my-claudecode.js` or `node <plugin-root>/bin/oh-my-claudecode.js`.",
     "- Claude /goal = the whole ultragoal run; OMC G001/G002/etc. = ledger stories.",
     "- First confirm the active Claude /goal for this session; if none is active, invoke /goal <condition> with the aggregate payload below. If you cannot invoke /goal in this session (e.g. standalone Claude Code), ask the user to type it and wait; --claude-goal-json reconciles the ledger only and does not satisfy the PreToolUse /goal guard.",
     "- If the active /goal already reports the same aggregate objective as active, continue this OMC story without setting a new /goal.",
@@ -127695,6 +127802,8 @@ function buildAggregateClaudeGoalInstruction(goal, plan) {
 
 // src/cli/commands/ultragoal.ts
 var ULTRAGOAL_HELP = `omc ultragoal - Durable repo-native multi-goal workflow with Claude Code /goal handoff
+
+Plugin-only installs where omc is not on PATH can use oh-my-claudecode.js or node <plugin-root>/bin/oh-my-claudecode.js instead.
 
 Usage:
   omc ultragoal create-goals [--brief <text> | --brief-file <path> | --from-stdin] [--goal <title::objective>] [--claude-goal-mode <aggregate|per-story>] [--force] [--plan-id <id> | --auto-plan-id] [--json]
