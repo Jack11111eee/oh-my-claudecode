@@ -77,7 +77,8 @@ function New-ProviderLaunchInvocation {
   }
   $batchCommand = '%' + $TempEnvironmentVariable + '%\' + $batchName
   $commandPrefix = [O]::BuildCommandLine([string[]]@($cmdPath))
-  $commandLine = $commandPrefix + ' /d /v:off /s /c ""' + $batchCommand + '""'
+  $quotedBatchCommand = '"' + $batchCommand + '"'
+  $commandLine = $commandPrefix + ' /d /v:off /s /c ""' + $quotedBatchCommand + '""'
   return @{ provider_argv = $ProviderArgv; application_path = $cmdPath; command_line = $commandLine; batch_path = $batchPath }
 }`,
     'Add-Type @"',
