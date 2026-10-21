@@ -81,10 +81,14 @@ try {
   $process = [System.Diagnostics.Process]::Start($startInfo)
   if (-not $process.WaitForExit(15000)) { $process.Kill(); throw 'Generated cmd.exe provider wrapper timed out' }
   if ($process.ExitCode -ne 37) { throw "Expected provider exit code 37, got $($process.ExitCode); generated command line: $($launch.command_line); expanded command line: $($launch.command_line.Replace('%TEMP%', $helperRoot)); batch content: $batch" }
-  $actualArgv = [IO.File]::ReadAllText((Join-Path $helperRoot 'argv.json')) | ConvertFrom-Json
+  # PowerShell 5.1 ConvertTo-Json serializes a ConvertFrom-Json array as {"value":[...],"Count":n},
+  # so compare the decoded strings element by element instead of their re-serialized JSON.
+  $actualArgv = [string[]]([IO.File]::ReadAllText((Join-Path $helperRoot 'argv.json')) | ConvertFrom-Json)
   $actualArgvJson = ConvertTo-Json -InputObject $actualArgv -Compress
   $expectedArgvJson = ConvertTo-Json -InputObject $payloadArgv -Compress
-  if ($actualArgvJson -cne $expectedArgvJson) { throw "Generated wrapper changed provider argv; expected: $expectedArgvJson; actual: $actualArgvJson; batch content: $batch" }
+  $argvMatches = $actualArgv.Count -eq $payloadArgv.Count
+  for ($i = 0; $argvMatches -and $i -lt $payloadArgv.Count; $i++) { if ($actualArgv[$i] -cne $payloadArgv[$i]) { $argvMatches = $false } }
+  if (-not $argvMatches) { throw "Generated wrapper changed provider argv; expected: $expectedArgvJson; actual: $actualArgvJson; batch content: $batch" }
   $exePath = Join-Path $env:SystemRoot 'System32\cmd.exe'
   $exeLaunch = New-ProviderLaunchInvocation -ProviderArgv ([string[]]@($exePath, '--version')) -SystemRoot $env:SystemRoot
   if ($exeLaunch.batch_path -or $exeLaunch.provider_argv.Count -ne 2 -or $exeLaunch.application_path -ne $exePath) { throw 'Expected executable argv to pass through unchanged' }

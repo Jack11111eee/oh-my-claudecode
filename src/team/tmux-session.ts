@@ -3333,9 +3333,9 @@ function detectPaneTrustPromptKind(captured: string, provider?: CliAgentType): P
   const tail = lines.slice(-12);
 
   if ((provider === undefined || provider === 'codex')
-    && lines.some(line => /^Trust this folder\?/i.test(line))
-    && lines.some(line => /\b1\.\s*Trust and continue\b/i.test(line))
-    && lines.some(line => /\b2\.\s*Quit\b/i.test(line))) {
+    && tail.some(line => /^Trust this folder\?/i.test(line))
+    && tail.some(line => /\b1\.\s*Trust and continue\b/i.test(line))
+    && tail.some(line => /\b2\.\s*Quit\b/i.test(line))) {
     return 'codex_directory';
   }
 
