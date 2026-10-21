@@ -94,9 +94,10 @@ export function buildWindowsSupervisorSource(): string {
 $ErrorActionPreference = "Stop"
 $env:ComSpec = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String("__COMSPEC_BASE64__"))
 $argvEnvelope = ConvertFrom-Json -InputObject ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String("__ARGV_BASE64__")))
-$providerArgv = [string[]]@($argvEnvelope.argv)
+$providerArgv = [string[]]$argvEnvelope.argv
 $providerPath = [string]$providerArgv[0]
-$providerArguments = [string[]]@($providerArgv | Select-Object -Skip 1)
+$providerArguments = New-Object string[] ($providerArgv.Length - 1)
+[Array]::Copy($providerArgv, 1, $providerArguments, 0, $providerArguments.Length)
 $exitCode = 1
 & $providerPath @providerArguments
 if ($null -eq $LASTEXITCODE) { $exitCode = 0 } else { $exitCode = [int]$LASTEXITCODE }
@@ -382,6 +383,7 @@ export interface MaterializedProviderSpawnInvocation {
   command: string;
   args: string[];
   cleanup: () => Promise<void>;
+  env?: NodeJS.ProcessEnv;
   completionPath?: string;
   completionBinding?: WorkerLaunchCompletionBinding;
   stdinPayload?: string;
@@ -2017,7 +2019,16 @@ export function buildWindowsSupervisorInvocation(
   sourceEnv: NodeJS.ProcessEnv = process.env,
 ): MaterializedProviderSpawnInvocation {
   const authorityEnv = Object.fromEntries(Object.entries(spec.provider_env).sort(([a], [b]) => a.localeCompare(b)));
-  const env = Object.fromEntries(Object.entries(buildBootstrapProviderEnvironment(spec, sourceEnv, 'win32')).sort(([a], [b]) => a.localeCompare(b)));
+  const providerEnvironment = Object.fromEntries(Object.entries(buildBootstrapProviderEnvironment(spec, sourceEnv, 'win32')).sort(([a], [b]) => a.localeCompare(b)));
+  const supervisorEnvironment = { ...providerEnvironment };
+  const systemRoot = providerEnvironment.SystemRoot;
+  if (!systemRoot || !/^[A-Za-z]:\\/.test(systemRoot)) throw new Error('worker_launch_powershell_authority_missing');
+  for (const key of Object.keys(supervisorEnvironment)) {
+    if (key.toUpperCase() === 'PSMODULEPATH') delete supervisorEnvironment[key];
+  }
+  // PowerShell 5.1 resolves ConvertFrom-Json and Add-Type through its module path.
+  // Keep this only in the supervisor process, never in the provider environment.
+  supervisorEnvironment.PSModulePath = `${systemRoot}\\System32\\WindowsPowerShell\\v1.0\\Modules`;
   const canonical_json = JSON.stringify({
     protocol: WORKER_LAUNCH_AUTHORITY_PROTOCOL,
     nonce: spec.containment_nonce,
@@ -2034,14 +2045,13 @@ export function buildWindowsSupervisorInvocation(
     supervisor_source_sha256: spec.supervisor_source_sha256,
     identity: identityOf(spec),
     provider_argv: [...spec.provider_argv],
-    provider_env: env,
+    provider_env: providerEnvironment,
     cwd: resolve(spec.cwd),
   }), 'utf8').toString('base64');
-  const systemRoot = env.SystemRoot;
-  if (!systemRoot || !/^[A-Za-z]:\\/.test(systemRoot)) throw new Error('worker_launch_powershell_authority_missing');
   return {
     command: `${systemRoot}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe`,
     args: ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', encodePowerShell(buildWindowsSupervisorSource())],
+    env: supervisorEnvironment,
     stdinPayload: Buffer.from(payload, 'base64').toString('utf8'),
     cleanup: async () => {},
   };
@@ -2281,7 +2291,7 @@ export async function runWorkerLaunchBootstrap(value: unknown): Promise<WorkerLa
       }
       const child = spawn(invocation.command, invocation.args, {
         cwd: spec.cwd,
-        env: providerEnv,
+        env: invocation.env ?? providerEnv,
         stdio: process.platform === 'win32'
           ? ['pipe', 'pipe', 'pipe']
           : invocation.providerGateFd === undefined

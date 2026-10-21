@@ -2423,6 +2423,7 @@ describe('worker launch acknowledgement', () => {
       SystemRoot: 'C:\\Windows',
       SYSTEMROOT: 'D:\\ConflictingWindows',
       USERPROFILE: 'C:\\Users\\provider',
+      PSModulePath: 'C:\\Users\\provider\\CustomModules',
       HOME: '/home/wrong-platform',
       GH_TOKEN: 'ambient-secret',
     };
@@ -2439,6 +2440,8 @@ describe('worker launch acknowledgement', () => {
     const consumed = await readAndConsumeWorkerLaunchDescriptor(materialized.bootstrapDescriptorPath, 'win32') as WorkerLaunchBootstrapSpec;
     const invocation = buildWindowsSupervisorInvocation(consumed, baselineEnv);
     if (!invocation.stdinPayload) throw new Error('worker_launch_test_supervisor_payload_missing');
+    expect(invocation.env).toMatchObject({ PSModulePath: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\Modules' });
+    expect(invocation.env).not.toHaveProperty('GH_TOKEN');
     expect(invocation.command.length + invocation.args.join(' ').length + 16).toBeLessThan(32_767);
     const encodedLoader = invocation.args.at(-1);
     if (!encodedLoader) throw new Error('worker_launch_test_supervisor_loader_missing');

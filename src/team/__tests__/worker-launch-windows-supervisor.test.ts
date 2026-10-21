@@ -38,7 +38,9 @@ describe('generated Windows worker supervisor', () => {
     expect(source).toContain('New-ProviderLaunchInvocation');
     expect(source).toContain('ConvertTo-Json -InputObject @{ argv = @($ProviderArgv) } -Compress');
     expect(source).toContain('$argvEnvelope = ConvertFrom-Json -InputObject ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String("__ARGV_BASE64__")))');
-    expect(source).toContain('$providerArgv = [string[]]@($argvEnvelope.argv)');
+    expect(source).toContain('$providerArgv = [string[]]$argvEnvelope.argv');
+    expect(source).toContain('$providerArguments = New-Object string[] ($providerArgv.Length - 1)');
+    expect(source).toContain('[Array]::Copy($providerArgv, 1, $providerArguments, 0, $providerArguments.Length)');
     expect(source).not.toContain('ConvertTo-Json -InputObject @($ProviderArgv) -Compress');
     expect(source).toContain('function Write-WorkerLaunchStage([string]$stage) { [Console]::Error.WriteLine("worker-launch-stage:" + $stage); [Console]::Error.Flush() }');
     expect(source).toContain('$payload = ConvertFrom-Json -InputObject $payloadLine');
@@ -136,7 +138,7 @@ try {
   $argvMatch = [regex]::Match($launcher, '\$argvEnvelope = ConvertFrom-Json -InputObject \(\[Text.Encoding\]::UTF8.GetString\(\[Convert\]::FromBase64String\("([A-Za-z0-9+/=]+)"\)\)\)')
   if (-not $argvMatch.Success) { throw 'Generated launcher lost its encoded argv payload' }
   $decodedEnvelope = ConvertFrom-Json -InputObject ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($argvMatch.Groups[1].Value)))
-  $decodedArgv = [string[]]@($decodedEnvelope.argv)
+  $decodedArgv = [string[]]$decodedEnvelope.argv
   if ($decodedArgv.Count -ne $providerArgv.Count) { throw "Structured launcher changed provider argv count; expected: $($providerArgv.Count); actual: $($decodedArgv.Count)" }
   for ($i = 0; $i -lt $providerArgv.Count; $i++) {
     if ($decodedArgv[$i] -cne $providerArgv[$i]) { throw "Structured launcher changed provider argv at index $i" }
@@ -156,7 +158,7 @@ try {
   if ($process.ExitCode -ne 37) { throw "Expected provider exit code 37, got $($process.ExitCode); generated command line: $($launch.command_line)" }
   if ([Console]::InputEncoding.CodePage -ne $expectedInputCodePage -or [Console]::OutputEncoding.CodePage -ne $expectedOutputCodePage) { throw 'Generated launcher changed shared console code pages' }
   $actualArgvEnvelope = ConvertFrom-Json -InputObject ([IO.File]::ReadAllText((Join-Path $helperRoot 'argv.json')))
-  $actualArgv = [string[]]@($actualArgvEnvelope.argv)
+  $actualArgv = [string[]]$actualArgvEnvelope.argv
   if ($actualArgv.Count -ne $payloadArgv.Count) { throw "Generated launcher changed provider argv count; expected: $($payloadArgv.Count); actual: $($actualArgv.Count)" }
   for ($i = 0; $i -lt $payloadArgv.Count; $i++) {
     if ([string]$actualArgv[$i] -cne [string]$payloadArgv[$i]) { throw "Generated launcher changed provider argv at index $i" }
