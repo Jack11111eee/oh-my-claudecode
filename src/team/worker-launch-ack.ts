@@ -34,6 +34,7 @@ const WORKER_LAUNCH_INTERNAL_ENV_KEYS = new Set([
 ]);
 const WORKER_LAUNCH_AUTHORITY_PROTOCOL = 'worker-launch-authority-v1';
 const WINDOWS_SUPERVISOR_PROTOCOL = 'worker-launch-windows-supervisor-v1';
+const WINDOWS_SUPERVISOR_INPUT_READY_MARKER = 'worker-launch-input-ready-v1';
 
 export function buildWindowsSupervisorSource(): string {
   return [
@@ -42,6 +43,7 @@ export function buildWindowsSupervisorSource(): string {
     'public static class WorkerLaunchInput { public static void Initialize() { System.Console.SetIn(new System.IO.StreamReader(System.Console.OpenStandardInput(), new System.Text.UTF8Encoding(false), true)); } public static System.Threading.Tasks.Task<string> ReadLineAsync() { return System.Threading.Tasks.Task.Run(() => System.Console.In.ReadLine()); } }',
     '"@',
     '[WorkerLaunchInput]::Initialize()',
+    '[Console]::Out.WriteLine("' + WINDOWS_SUPERVISOR_INPUT_READY_MARKER + '"); [Console]::Out.Flush()',
     '$payloadLine = [WorkerLaunchInput]::ReadLineAsync().GetAwaiter().GetResult()',
     'if ($null -eq $payloadLine) { throw "worker_launch_authority_lost" }',
     '$payload = $payloadLine | ConvertFrom-Json',
@@ -51,7 +53,7 @@ export function buildWindowsSupervisorSource(): string {
     '$authority = $json | ConvertFrom-Json; if ($authority.provider_argv.Count -ne $payload.provider_argv.Count) { throw "worker_launch_authority_argv_mismatch" }; for ($i = 0; $i -lt $authority.provider_argv.Count; $i++) { if ([string]$authority.provider_argv[$i] -cne [string]$payload.provider_argv[$i]) { throw "worker_launch_authority_argv_mismatch" } }',
     String.raw`function Quote-ProviderCmdArgument([string]$value) {
   if ($value.IndexOf([char]0) -ge 0 -or $value.IndexOf([char]13) -ge 0 -or $value.IndexOf([char]10) -ge 0) { throw "worker_launch_provider_argv_invalid" }
-  return '"' + $value.Replace('%', '%%%%').Replace('"', '""').Replace('^', '^^^^') + '"'
+  return '"' + $value.Replace('%', '%%%%').Replace('"', '""').Replace('^', '^^') + '"'
 }
 function New-ProviderLaunchInvocation {
   param([string[]]$ProviderArgv, [string]$SystemRoot, [string]$TempRoot, [string]$TempEnvironmentVariable)
@@ -68,7 +70,8 @@ function New-ProviderLaunchInvocation {
   $quotedArgv = @($ProviderArgv | ForEach-Object { Quote-ProviderCmdArgument ([string]$_) }) -join ' '
   $lineEnding = [string][char]13 + [char]10
   $codePageCapture = 'for /f "tokens=2 delims=:" %%c in (' + [char]39 + 'chcp' + [char]39 + ') do set "_OMC_OLD_CODEPAGE=%%c"'
-  $script = '@echo off' + $lineEnding + $codePageCapture + $lineEnding + 'chcp 65001 >nul' + $lineEnding + 'call ' + $quotedArgv + $lineEnding + 'set "_OMC_PROVIDER_EXIT=%ERRORLEVEL%"' + $lineEnding + 'if defined _OMC_OLD_CODEPAGE chcp %_OMC_OLD_CODEPAGE% >nul' + $lineEnding + 'exit /b %_OMC_PROVIDER_EXIT%' + $lineEnding
+  $nestedCommand = '"' + $cmdPath + '" /d /v:off /s /c ""' + $quotedArgv + '""'
+  $script = '@echo off' + $lineEnding + $codePageCapture + $lineEnding + 'chcp 65001 >nul' + $lineEnding + $nestedCommand + $lineEnding + 'set "_OMC_PROVIDER_EXIT=%ERRORLEVEL%"' + $lineEnding + 'if defined _OMC_OLD_CODEPAGE chcp %_OMC_OLD_CODEPAGE% >nul' + $lineEnding + 'exit /b %_OMC_PROVIDER_EXIT%' + $lineEnding
   $batchFile = [System.IO.File]::Open($batchPath, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
   try {
     $bytes = [System.Text.UTF8Encoding]::new($false).GetBytes($script)
@@ -83,9 +86,9 @@ function New-ProviderLaunchInvocation {
   }
   $batchCommand = '%' + $TempEnvironmentVariable + '%\' + $batchName
   $commandPrefix = [O]::BuildCommandLine([string[]]@($cmdPath))
-  # /s strips the command string's outer quotes, leaving the wrapper path
-  # quoted after TEMP/TMP expansion even when the temp directory has spaces.
-  $commandLine = $commandPrefix + ' /d /v:off /s /c ""' + $batchCommand + '""'
+  # /s strips the command string's outer quotes, leaving call and the wrapper
+  # path quoted after TEMP/TMP expansion even when the temp directory has spaces.
+  $commandLine = $commandPrefix + ' /d /v:off /s /c "call "' + $batchCommand + '""'
   return @{ provider_argv = $ProviderArgv; application_path = $cmdPath; command_line = $commandLine; batch_path = $batchPath }
 }`,
     'Add-Type @"',
@@ -2278,19 +2281,17 @@ export async function runWorkerLaunchBootstrap(value: unknown): Promise<WorkerLa
       let resolveWindowsReady!: (ready: boolean) => void;
       let resolveWindowsTerminal!: (verified: boolean) => void;
       let windowsTerminationProofWrite: Promise<boolean> | null = null;
+      let windowsBootstrapPayloadSent = false;
       const windowsReady = new Promise<boolean>(resolve => { resolveWindowsReady = resolve; });
       const windowsTerminal = new Promise<boolean>(resolve => { resolveWindowsTerminal = resolve; });
       if (process.platform === 'win32') {
         // Own control-pipe errors for the entire child lifetime. An EPIPE
-        // cannot establish readiness or cleanup; the existing proof paths do.
+        // cannot establish readiness, but terminal proof may still arrive
+        // after a terminate write races with the provider's natural exit.
         child.stdin?.on('error', () => {
           resolveWindowsReady(false);
-          resolveWindowsTerminal(false);
         });
         child.stderr?.resume();
-        if (invocation.stdinPayload && child.stdin?.writable) {
-          child.stdin.write(`${invocation.stdinPayload}\n`);
-        }
       }
       if (providerGate) {
         // Own the extra stream's error for its entire lifetime. ChildProcess
@@ -2335,6 +2336,15 @@ export async function runWorkerLaunchBootstrap(value: unknown): Promise<WorkerLa
             const line = buffered.slice(0, newline).trim();
             buffered = buffered.slice(newline + 1);
             if (!line) continue;
+            if (line === WINDOWS_SUPERVISOR_INPUT_READY_MARKER) {
+              if (!windowsBootstrapPayloadSent) {
+                windowsBootstrapPayloadSent = true;
+                if (invocation.stdinPayload && child.stdin?.writable) {
+                  child.stdin.write(`${invocation.stdinPayload}\n`);
+                }
+              }
+              continue;
+            }
             let message: Record<string, unknown>;
             try { message = JSON.parse(line) as Record<string, unknown>; } catch { continue; }
             const matches = message.protocol === WINDOWS_SUPERVISOR_PROTOCOL

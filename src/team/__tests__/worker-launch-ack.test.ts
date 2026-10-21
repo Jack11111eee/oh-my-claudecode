@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { execFileSync, spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
-import { existsSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
@@ -2959,6 +2959,165 @@ describe('worker launch acknowledgement', () => {
       vi.resetModules();
     }
   });
+
+  it.each(['valid', 'invalid', 'missing'] as const)(
+    'keeps Windows cleanup proof pending through stdin EPIPE when terminal proof is %s',
+    async terminalProof => {
+      const launchAttempt = await attempt();
+      const spec = buildWorkerLaunchBootstrapSpec(launchAttempt, ['codex'], cwd);
+      const originalCurrent = await readFile(launchAttempt.currentPath, 'utf8');
+      const successor = await prepareWorkerLaunchAttempt({
+        cwd,
+        teamName: launchAttempt.team_name,
+        workerName: launchAttempt.worker_name,
+        instanceId: randomUUID(),
+        paneId: '%3',
+        provider: launchAttempt.provider,
+        runtimeCliPath: launchAttempt.runtimeCliPath,
+      });
+      const successorCurrent = await readFile(successor.currentPath, 'utf8');
+      await writeFile(launchAttempt.currentPath, originalCurrent, 'utf8');
+      const providerPid = process.pid;
+      const processStartIdentity = await getProcessStartIdentity(providerPid);
+      if (!processStartIdentity) throw new Error('worker_launch_test_process_identity_missing');
+      const originalSystemRoot = process.env.SystemRoot;
+
+      vi.resetModules();
+      const actualChildProcess = await vi.importActual<typeof import('node:child_process')>('node:child_process');
+      const fakeChild = Object.assign(new EventEmitter(), {
+        pid: providerPid + 100_000,
+        stdin: new PassThrough(),
+        stdout: new PassThrough(),
+        stderr: new PassThrough(),
+      });
+      let terminateWriteObserved = false;
+      fakeChild.stdin.on('data', chunk => {
+        for (const line of String(chunk).split('\n')) {
+          let message: Record<string, unknown>;
+          try { message = JSON.parse(line) as Record<string, unknown>; } catch { continue; }
+          if (message.kind !== 'terminate' || terminateWriteObserved) continue;
+          terminateWriteObserved = true;
+          fakeChild.stdin.emit('error', Object.assign(new Error('supervisor control pipe closed'), { code: 'EPIPE' }));
+        }
+      });
+      const spawnMock = vi.fn(() => {
+        setImmediate(() => {
+          fakeChild.emit('spawn');
+          fakeChild.stdout.write(`${JSON.stringify({
+            protocol: 'worker-launch-windows-supervisor-v1',
+            kind: 'ready',
+            attempt_id: spec.attempt_id,
+            instance_id: spec.instance_id,
+            authority_digest: spec.authority_digest,
+            containment_nonce: spec.containment_nonce,
+            pid: providerPid,
+            process_start_identity: processStartIdentity,
+          })}\n`);
+        });
+        return fakeChild as unknown as ReturnType<typeof spawn>;
+      });
+      vi.doMock('node:child_process', () => ({ ...actualChildProcess, spawn: spawnMock }));
+      const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
+      let bootstrap: Promise<Awaited<ReturnType<typeof runWorkerLaunchBootstrap>>> | undefined;
+      let result: Awaited<ReturnType<typeof runWorkerLaunchBootstrap>> | undefined;
+      let supersededAfterReady = false;
+      try {
+        process.env.SystemRoot = 'C:\\Windows';
+        Object.defineProperty(process, 'platform', { value: 'win32' });
+        const workerLaunch = await import('../worker-launch-ack.js');
+        bootstrap = workerLaunch.runWorkerLaunchBootstrap(spec);
+        fakeChild.stdout.on('data', chunk => {
+          for (const line of String(chunk).split('\n')) {
+            let message: Record<string, unknown>;
+            try { message = JSON.parse(line) as Record<string, unknown>; } catch { continue; }
+            if (message.kind !== 'ready' || message.attempt_id !== spec.attempt_id) continue;
+            queueMicrotask(() => {
+              supersededAfterReady = !existsSync(launchAttempt.startedPath);
+              writeFileSync(launchAttempt.currentPath, successorCurrent, 'utf8');
+            });
+          }
+        });
+        await expect(workerLaunch.awaitWorkerLaunchAcknowledgement(launchAttempt, {
+          timeoutMs: LAUNCH_WAIT_TIMEOUT_MS,
+          pollIntervalMs: 5,
+        })).resolves.toEqual({ ok: true });
+        await expect.poll(() => terminateWriteObserved, { timeout: LAUNCH_WAIT_TIMEOUT_MS, interval: 5 }).toBe(true);
+        expect(supersededAfterReady).toBe(true);
+        expect(JSON.parse(await readFile(launchAttempt.currentPath, 'utf8')).attempt_id).toBe(successor.attempt_id);
+
+        if (terminalProof !== 'missing') {
+          fakeChild.stdout.write(`${JSON.stringify({
+            protocol: 'worker-launch-windows-supervisor-v1',
+            kind: 'terminal',
+            attempt_id: spec.attempt_id,
+            instance_id: spec.instance_id,
+            authority_digest: terminalProof === 'valid' ? spec.authority_digest : 'forged-authority',
+            containment_nonce: spec.containment_nonce,
+            pid: providerPid,
+            outcome: 'terminated',
+            exit_code: 0,
+            cleanup_verified: true,
+          })}\n`);
+        }
+        if (terminalProof === 'valid') {
+          await expect.poll(async () => {
+            try {
+              return JSON.parse(await readFile(`${launchAttempt.startedPath}.termination-complete`, 'utf8')) as Record<string, unknown>;
+            } catch {
+              return undefined;
+            }
+          }, { timeout: 2_000, interval: 5 }).toMatchObject({
+            kind: 'worker_launch_termination_complete',
+            cleanup_verified: true,
+            authority_digest: spec.authority_digest,
+          });
+        }
+        fakeChild.emit('close', 0, null);
+        result = await bootstrap;
+        await expect.poll(async () => {
+          try {
+            return JSON.parse(await readFile(`${launchAttempt.startedPath}.terminal`, 'utf8')) as Record<string, unknown>;
+          } catch {
+            return undefined;
+          }
+        }, { timeout: 2_000, interval: 5 }).toMatchObject(terminalProof === 'valid'
+          ? { outcome: 'exit', cleanup_verified: true }
+          : { outcome: 'cleanup_unverified', cleanup_verified: false });
+      } finally {
+        if (originalPlatform) Object.defineProperty(process, 'platform', originalPlatform);
+        if (originalSystemRoot === undefined) delete process.env.SystemRoot;
+        else process.env.SystemRoot = originalSystemRoot;
+        if (bootstrap && !result) {
+          fakeChild.emit('close', 0, null);
+          await bootstrap.catch(() => undefined);
+        }
+        fakeChild.stdin.destroy();
+        fakeChild.stdout.destroy();
+        fakeChild.stderr.destroy();
+        vi.doUnmock('node:child_process');
+        vi.resetModules();
+      }
+
+      if (terminalProof === 'valid') {
+        expect(result).toEqual({ outcome: 'superseded' });
+        const completion = JSON.parse(await readFile(`${launchAttempt.startedPath}.termination-complete`, 'utf8')) as Record<string, unknown>;
+        expect(completion).toMatchObject({
+          kind: 'worker_launch_termination_complete',
+          cleanup_verified: true,
+          pid: providerPid,
+          process_start_identity: processStartIdentity,
+          authority_digest: spec.authority_digest,
+          containment_nonce: spec.containment_nonce,
+          outcome: 'terminated',
+        });
+      } else {
+        expect(result).toEqual({ outcome: 'provider_cleanup_unverified' });
+        await expect(readFile(`${launchAttempt.startedPath}.termination-complete`, 'utf8'))
+          .rejects.toMatchObject({ code: 'ENOENT' });
+      }
+      await expect(readFile(launchAttempt.startedPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+    },
+  );
 
   const invalidWindowsTerminationRecords: Array<{
     description: string;

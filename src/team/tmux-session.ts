@@ -3333,7 +3333,7 @@ function detectPaneTrustPromptKind(captured: string, provider?: CliAgentType): P
   const tail = lines.slice(-12);
   const lastCodexPromptIndex = lines.findLastIndex(line => paneLineLooksLikeIdlePrompt(line, 'codex'));
   const lastCodexPromptIsTrustChoice = lastCodexPromptIndex >= 0
-    && /\b1\.\s*Trust and continue\b/i.test(lines[lastCodexPromptIndex]!);
+    && /\b(?:1\.\s*Trust and continue|2\.\s*Quit)\b/i.test(lines[lastCodexPromptIndex]!);
 
   if ((provider === undefined || provider === 'codex')
     && lines.some(line => /^Trust this folder\?/i.test(line))

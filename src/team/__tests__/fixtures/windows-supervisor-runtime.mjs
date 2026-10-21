@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 // console. No model, provider CLI, or user state is accessed.
 const [role, root, mode] = process.argv.slice(2);
 const fixture = fileURLToPath(import.meta.url);
+const inputReadyMarker = 'worker-launch-input-ready-v1';
 const write = (name, value) => writeFileSync(join(root, name), JSON.stringify(value));
 const errors = [];
 for (const stream of [process.stdin, process.stdout, process.stderr]) {
@@ -50,10 +51,12 @@ if (role === 'descendant') {
     controllerPid: process.pid, supervisorPid: child.pid, supervisorCommand: invocation.command,
     supervisorArgsPrefix: invocation.args.slice(0, -1), encodedCommandLength: invocation.args.at(-1)?.length,
     stdinPayloadLength: Buffer.byteLength(invocation.stdinPayload + '\n'), stdinWriteAccepted: false,
-    stdinBytesWritten: 0, stdinWriteCompleted: false, stdout: '', stderr: '', frames: [], errors, commands: [], closed: false,
+    stdinBytesWritten: 0, stdinWriteCompleted: false, stdinReadyMarkerReceived: false,
+    stdout: '', stderr: '', frames: [], errors, commands: [], closed: false,
   };
   let pending = '';
   let sequence = -1;
+  let stdinPayloadWritten = false;
   const persist = () => write('controller.json', state);
   child.stdin.on('error', error => { errors.push({ stream: 'stdin', code: error.code }); persist(); });
   child.stdout.on('error', error => { errors.push({ stream: 'stdout', code: error.code }); persist(); });
@@ -66,6 +69,20 @@ if (role === 'descendant') {
     pending = lines.pop();
     for (const line of lines) {
       if (!line) continue;
+      if (line === inputReadyMarker) {
+        state.stdinReadyMarkerReceived = true;
+        if (!stdinPayloadWritten && child.stdin.writable) {
+          stdinPayloadWritten = true;
+          state.stdinWriteAccepted = child.stdin.write(invocation.stdinPayload + '\n', error => {
+            if (error) errors.push({ stream: 'stdin-write', code: error.code });
+            state.stdinWriteCompleted = true;
+            persist();
+          });
+          state.stdinBytesWritten = child.stdin.bytesWritten;
+        }
+        persist();
+        continue;
+      }
       try { state.frames.push(JSON.parse(line)); }
       catch { errors.push({ stream: 'json', line }); }
     }
@@ -96,13 +113,6 @@ if (role === 'descendant') {
     state.partialStdout = pending;
     persist();
   });
-  persist();
-  state.stdinWriteAccepted = child.stdin.write(invocation.stdinPayload + '\n', error => {
-    if (error) errors.push({ stream: 'stdin-write', code: error.code });
-    state.stdinWriteCompleted = true;
-    persist();
-  });
-  state.stdinBytesWritten = child.stdin.bytesWritten;
   persist();
 } else {
   throw new Error('Unknown Windows supervisor fixture role');

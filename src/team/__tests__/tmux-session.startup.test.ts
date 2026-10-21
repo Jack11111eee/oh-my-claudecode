@@ -719,6 +719,19 @@ describe('worker pane startup safety', () => {
     ].join('\n');
     expect(paneHasTrustPrompt(staleCapture, 'codex')).toBe(false);
     expect(paneLooksReady(staleCapture, 'codex')).toBe(true);
+
+    const quitSelectedCapture = capture
+      .replace('› 1. Trust and continue', '  1. Trust and continue')
+      .replace('  2. Quit', '› 2. Quit');
+    expect(paneHasTrustPrompt(quitSelectedCapture, 'codex')).toBe(true);
+    expect(paneLooksReady(quitSelectedCapture, 'codex')).toBe(false);
+    tmuxState.args = [];
+    tmuxState.captures = [quitSelectedCapture];
+    await expect(deliverStartupInbox(context, 'List files and report the result.')).resolves.toEqual({
+      ok: false,
+      reason: 'codex_workspace_untrusted',
+    });
+    expect(tmuxState.args.some(args => args.includes('send-keys'))).toBe(false);
   });
 
   strictTmuxIt.each([

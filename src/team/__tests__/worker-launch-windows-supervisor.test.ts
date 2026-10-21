@@ -17,8 +17,12 @@ describe('generated Windows worker supervisor', () => {
     expect(source).toContain('[O]::ReadLineAsync()');
     expect(source).toContain('Task.Run(() => Console.In.ReadLine())');
     const initializeInput = source.indexOf('[WorkerLaunchInput]::Initialize()');
+    const inputReadyMarker = source.indexOf('[Console]::Out.WriteLine("worker-launch-input-ready-v1"); [Console]::Out.Flush()');
+    const readBootstrapPayload = source.indexOf('$payloadLine = [WorkerLaunchInput]::ReadLineAsync().GetAwaiter().GetResult()');
     expect(initializeInput).toBeGreaterThan(-1);
-    expect(initializeInput).toBeLessThan(source.indexOf('$payloadLine = [WorkerLaunchInput]::ReadLineAsync()'));
+    expect(inputReadyMarker).toBeGreaterThan(initializeInput);
+    expect(inputReadyMarker).toBeLessThan(readBootstrapPayload);
+    expect(readBootstrapPayload).toBeGreaterThan(-1);
     expect(initializeInput).toBeLessThan(source.indexOf('$readTask = [O]::ReadLineAsync()'));
     expect(source).toContain('$payloadLine = [WorkerLaunchInput]::ReadLineAsync().GetAwaiter().GetResult()');
     expect(source).not.toContain('[System.Threading.Tasks.Task]::Run([System.Func[string]]');
@@ -31,9 +35,11 @@ describe('generated Windows worker supervisor', () => {
     expect(source).toContain('exit_code=$exitCode');
     expect(source).toContain('New-ProviderLaunchInvocation');
     expect(source).toContain("Replace('%', '%%%%')");
-    expect(source).toContain("Replace('^', '^^^^')");
+    expect(source).toContain("Replace('^', '^^')");
+    expect(source).toContain(' /d /v:off /s /c ""');
+    expect(source).not.toContain("'call ' + $quotedArgv");
     expect(source).toContain('chcp 65001 >nul');
-    expect(source).toContain(String.raw` /s /c ""`);
+    expect(source).toContain(String.raw` /s /c "call "`);
 
   });
 
@@ -70,17 +76,18 @@ try {
   $batchPath = $launch.batch_path
   if ($launch.provider_argv.Count -ne 8) { throw 'Expected the validated provider argv to remain intact' }
   if ($launch.application_path -ne (Join-Path $env:SystemRoot 'System32\cmd.exe')) { throw 'Expected absolute System32 cmd.exe' }
-  if ($launch.command_line -notmatch ' /s /c ""%TEMP%\\omc-worker-[0-9a-f]+\.cmd""$') { throw "Expected cmd.exe /s /c quoting without CRT-escaped quotes; command line: $($launch.command_line)" }
+  if ($launch.command_line -notmatch ' /s /c "call "%TEMP%\\omc-worker-[0-9a-f]+\.cmd""$') { throw "Expected cmd.exe /s /c call quoting without CRT-escaped quotes; command line: $($launch.command_line)" }
   if ($launch.command_line.Contains('\\"')) { throw 'Expected cmd.exe command tail to avoid CRT quote escaping' }
   $batch = [IO.File]::ReadAllText($batchPath)
-  foreach ($literal in @('chcp 65001 >nul', '100%%%% ready', '%%%%USERPROFILE%%%%', 'bang!', 'caret^^^^', 'say ""hello"" & continue', 'two words', 'Grüße-λ-漢字')) {
+  foreach ($literal in @('chcp 65001 >nul', '100%%%% ready', '%%%%USERPROFILE%%%%', 'bang!', 'caret^^', 'say ""hello"" & continue', 'two words', 'Grüße-λ-漢字')) {
     if (-not $batch.Contains($literal)) { throw "Batch wrapper lost literal argument: $literal; batch content: $batch" }
   }
   $cleanupAnchor = 'if defined _OMC_OLD_CODEPAGE chcp %_OMC_OLD_CODEPAGE% >nul'
   if (-not $batch.Contains($cleanupAnchor)) { throw 'Generated wrapper lost code-page restoration line' }
   $batch = $batch.Replace($cleanupAnchor, $cleanupAnchor + [char]13 + [char]10 + 'echo cleanup> "%TEMP%\cleanup.marker"')
   [IO.File]::WriteAllText($batchPath, $batch, [Text.UTF8Encoding]::new($false))
-  $expectedProviderInvocation = 'call ' + (@($providerArgv | ForEach-Object { Quote-ProviderCmdArgument ([string]$_) }) -join ' ')
+  $nestedCmdPath = Join-Path $env:SystemRoot 'System32\cmd.exe'
+  $expectedProviderInvocation = '"' + $nestedCmdPath + '" /d /v:off /s /c ""' + (@($providerArgv | ForEach-Object { Quote-ProviderCmdArgument ([string]$_) }) -join ' ') + '""'
   if (-not $batch.Contains($expectedProviderInvocation)) { throw "Batch wrapper lost provider invocation line; expected: $expectedProviderInvocation; batch content: $batch" }
   $prefix = [O]::BuildCommandLine([string[]]@($launch.application_path))
   if (-not $launch.command_line.StartsWith($prefix + ' ', [StringComparison]::Ordinal)) { throw 'Expected application path prefix in command line' }

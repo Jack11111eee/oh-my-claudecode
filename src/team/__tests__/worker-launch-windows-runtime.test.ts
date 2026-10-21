@@ -30,7 +30,7 @@ const enabled = process.platform === 'win32' && Boolean(tmux && existsSync(tmux)
 const fixture = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'windows-supervisor-runtime.mjs');
 const protocol = 'worker-launch-windows-supervisor-v1';
 type Frame = { kind: string; pid: number; instance_id: string; attempt_id: string; authority_digest: string; containment_nonce: string; process_start_identity?: string; cleanup_verified?: boolean; exit_code?: number; outcome?: string; protocol: string };
-type State = { supervisorPid: number; controllerPid: number; supervisorCommand?: string; supervisorArgsPrefix?: string[]; encodedCommandLength?: number; stdinPayloadLength?: number; stdinWriteAccepted?: boolean; stdinBytesWritten?: number; stdinWriteCompleted?: boolean; stdout: string; stderr: string; frames: Frame[]; errors: { stream: string; code?: string }[]; commands: number[]; closed: boolean; exitCode?: number; partialStdout?: string };
+type State = { supervisorPid: number; controllerPid: number; supervisorCommand?: string; supervisorArgsPrefix?: string[]; encodedCommandLength?: number; stdinPayloadLength?: number; stdinWriteAccepted?: boolean; stdinBytesWritten?: number; stdinWriteCompleted?: boolean; stdinReadyMarkerReceived?: boolean; stdout: string; stderr: string; frames: Frame[]; errors: { stream: string; code?: string }[]; commands: number[]; closed: boolean; exitCode?: number; partialStdout?: string };
 type Provider = { pid: number; descendantPid?: number; tty: boolean[] };
 
 async function json<T>(path: string): Promise<T | null> {
@@ -115,6 +115,7 @@ async function run(mode: 'exit' | 'terminate' | 'eof'): Promise<void> {
         stdinWriteAccepted: state.stdinWriteAccepted,
         stdinBytesWritten: state.stdinBytesWritten,
         stdinWriteCompleted: state.stdinWriteCompleted,
+        stdinReadyMarkerReceived: state.stdinReadyMarkerReceived,
         frames: state.frames,
         errors: state.errors,
         stdout: state.stdout.slice(-2000),
@@ -124,6 +125,7 @@ async function run(mode: 'exit' | 'terminate' | 'eof'): Promise<void> {
     }
     capture(initial.supervisorPid);
     const ready = readyState.frames.find(frame => frame.kind === 'ready')!;
+    expect(readyState).toMatchObject({ stdinReadyMarkerReceived: true, stdinWriteAccepted: true });
     expect(ready).toMatchObject({ protocol, attempt_id: identity.attempt_id, instance_id: identity.instance_id, authority_digest: spec.authority_digest, containment_nonce: spec.containment_nonce });
     expect(capture(ready.pid)).toBe(ready.process_start_identity);
     const provider = await waitFor(() => json<Provider>(join(root, 'provider.json')), 'native provider console');
@@ -151,6 +153,8 @@ async function run(mode: 'exit' | 'terminate' | 'eof'): Promise<void> {
       const value = await json<State>(join(root, 'controller.json'));
       return value?.closed ? value : null;
     }, 'supervisor closed');
+    expect(closed.stdinReadyMarkerReceived).toBe(true);
+    expect(closed.stdinWriteCompleted).toBe(true);
     expect(closed.stdout).not.toContain('WINDOWS_SUPERVISOR_CONSOLE_MARKER');
     expect(closed.stdout).not.toContain('WINDOWS_SUPERVISOR_STDERR_MARKER');
     expect(closed.partialStdout).toBe('');
