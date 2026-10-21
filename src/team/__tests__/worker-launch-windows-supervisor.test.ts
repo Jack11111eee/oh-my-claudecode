@@ -36,7 +36,40 @@ describe('generated Windows worker supervisor', () => {
     expect(source).toContain('true, 0x00000004 | 0x00000400 | 0x00080000');
     expect(source).toContain('exit_code=$exitCode');
     expect(source).toContain('New-ProviderLaunchInvocation');
-    expect(source).toContain('ConvertTo-Json -InputObject @($ProviderArgv) -Compress');
+    expect(source).toContain('ConvertTo-Json -InputObject @{ argv = @($ProviderArgv) } -Compress');
+    expect(source).toContain('$argvEnvelope = ConvertFrom-Json -InputObject ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String("__ARGV_BASE64__")))');
+    expect(source).toContain('$providerArgv = [string[]]@($argvEnvelope.argv)');
+    expect(source).not.toContain('ConvertTo-Json -InputObject @($ProviderArgv) -Compress');
+    expect(source).toContain('function Write-WorkerLaunchStage([string]$stage) { [Console]::Error.WriteLine("worker-launch-stage:" + $stage); [Console]::Error.Flush() }');
+    expect(source).toContain('$payload = ConvertFrom-Json -InputObject $payloadLine');
+    expect(source).toContain('$authority = ConvertFrom-Json -InputObject $json');
+    expect(source).not.toContain('$payloadLine | ConvertFrom-Json');
+    expect(source).not.toContain('$json | ConvertFrom-Json');
+    expect(source).toContain('if ($hash -ne $expectedDigest) { throw "worker_launch_authority_digest_mismatch" }');
+    const parseAndValidationStages = [
+      'outer-payload-parse-started',
+      'outer-payload-parse-complete',
+      'digest-input-started',
+      'digest-input-complete',
+      'digest-hash-started',
+      'digest-hash-complete',
+      'digest-compare-started',
+      'digest-compare-complete',
+      'inner-authority-parse-started',
+      'inner-authority-parse-complete',
+      'argv-count-validation-started',
+      'argv-count-validation-complete',
+      'argv-value-validation-started',
+      'argv-value-validation-complete',
+    ];
+    let previousStage = source.indexOf('Write-WorkerLaunchStage "input-payload-read"');
+    expect(previousStage).toBeGreaterThan(-1);
+    for (const stage of parseAndValidationStages) {
+      const stageIndex = source.indexOf(`Write-WorkerLaunchStage "${stage}"`);
+      expect(stageIndex).toBeGreaterThan(previousStage);
+      previousStage = stageIndex;
+    }
+    expect(source.indexOf('Write-WorkerLaunchStage "authority-validated"')).toBeGreaterThan(previousStage);
     expect(source).toContain('& $providerPath @providerArguments');
     expect(source).toContain('[Console]::InputEncoding = $originalInputEncoding');
     expect(source).toContain('[Console]::OutputEncoding = $originalOutputEncoding');
@@ -81,17 +114,17 @@ $launcherPath = $null
 $process = $null
 try {
   $providerPath = Join-Path $helperRoot 'codex.cmd'
-  $providerScript = '@echo off' + [char]13 + [char]10 + '"%OMC_TEST_NODE_EXE%" -e "require(''fs'').writeFileSync(process.argv[1],JSON.stringify(process.argv.slice(2)))" "%~dp0argv.json" %*' + [char]13 + [char]10 + 'exit /b 37' + [char]13 + [char]10
+  $providerScript = '@echo off' + [char]13 + [char]10 + '"%OMC_TEST_NODE_EXE%" -e "require(''fs'').writeFileSync(process.argv[1],JSON.stringify({argv:process.argv.slice(2)}))" "%~dp0argv.json" %*' + [char]13 + [char]10 + 'exit /b 37' + [char]13 + [char]10
   [IO.File]::WriteAllText($providerPath, $providerScript, [Text.Encoding]::ASCII)
   $payloadArgv = [string[]]@('100% ready', '%USERPROFILE%', 'bang!', 'caret^', 'say "hello" & continue', 'two words', 'Grüße-λ-漢字', '')
   $providerArgv = [string[]]@($providerPath) + $payloadArgv
   $launch = New-ProviderLaunchInvocation -ProviderArgv $providerArgv -SystemRoot $env:SystemRoot -TempRoot $helperRoot -TempEnvironmentVariable 'TEMP'
   $launcherPath = $launch.launcher_path
-  if ($launch.provider_argv.Count -ne 9) { throw 'Expected the validated provider argv to remain intact' }
+  if ($launch.provider_argv.Count -ne $providerArgv.Count) { throw "Expected provider argv count $($providerArgv.Count); actual: $($launch.provider_argv.Count)" }
   if ($launch.application_path -ne (Join-Path $PSHOME 'powershell.exe')) { throw 'Expected absolute Windows PowerShell launcher' }
   if ($launch.command_line -match ' /d /v:off /s /c') { throw 'Expected structured launcher without inline CMD argv parsing' }
   foreach ($argument in $payloadArgv) {
-    if ($argument.Length -gt 0 -and $launch.command_line.Contains($argument)) { throw "Launcher command line exposed provider argv: $argument" }
+    if ($argument.Length -gt 0 -and $launch.command_line.Contains($argument)) { throw 'Launcher command line exposed provider argv' }
   }
   $expectedCommandLine = [O]::BuildCommandLine([string[]]@($launch.application_path, '-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $launcherPath))
   if ($launch.command_line -cne $expectedCommandLine) { throw "Unexpected PowerShell launcher command line: $($launch.command_line)" }
@@ -100,10 +133,11 @@ try {
   if (-not $comspecMatch.Success) { throw 'Generated launcher lost its explicit command-shell path' }
   $expectedComspec = Join-Path $env:SystemRoot 'System32\cmd.exe'
   if ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($comspecMatch.Groups[1].Value)) -cne $expectedComspec) { throw 'Generated launcher changed the validated command-shell path' }
-  $argvMatch = [regex]::Match($launcher, '\$providerArgv = @\(\[Text.Encoding\]::UTF8.GetString\(\[Convert\]::FromBase64String\("([A-Za-z0-9+/=]+)"\)\) \| ConvertFrom-Json\)')
+  $argvMatch = [regex]::Match($launcher, '\$argvEnvelope = ConvertFrom-Json -InputObject \(\[Text.Encoding\]::UTF8.GetString\(\[Convert\]::FromBase64String\("([A-Za-z0-9+/=]+)"\)\)\)')
   if (-not $argvMatch.Success) { throw 'Generated launcher lost its encoded argv payload' }
-  $decodedArgv = [string[]]@([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($argvMatch.Groups[1].Value)) | ConvertFrom-Json)
-  if ($decodedArgv.Count -ne $providerArgv.Count) { throw 'Structured launcher changed provider argv count' }
+  $decodedEnvelope = ConvertFrom-Json -InputObject ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($argvMatch.Groups[1].Value)))
+  $decodedArgv = [string[]]@($decodedEnvelope.argv)
+  if ($decodedArgv.Count -ne $providerArgv.Count) { throw "Structured launcher changed provider argv count; expected: $($providerArgv.Count); actual: $($decodedArgv.Count)" }
   for ($i = 0; $i -lt $providerArgv.Count; $i++) {
     if ($decodedArgv[$i] -cne $providerArgv[$i]) { throw "Structured launcher changed provider argv at index $i" }
   }
@@ -129,12 +163,11 @@ try {
   if (-not [IO.File]::Exists($cleanupMarker)) { throw 'Generated launcher did not reach cleanup after provider exit' }
   $restoredCodePages = [IO.File]::ReadAllText($cleanupMarker).Split(',')
   if ([int]$restoredCodePages[0] -ne $expectedInputCodePage -or [int]$restoredCodePages[1] -ne $expectedOutputCodePage) { throw "Generated launcher did not restore console code pages; expected: $expectedInputCodePage,$expectedOutputCodePage; actual: $($restoredCodePages -join ',')" }
-  $actualArgv = [IO.File]::ReadAllText((Join-Path $helperRoot 'argv.json')) | ConvertFrom-Json
-  if ($actualArgv.PSObject.Properties.Name -contains 'value' -and $actualArgv.PSObject.Properties.Name -contains 'Count') { $actualArgv = $actualArgv.value }
-  $actualArgv = @($actualArgv)
+  $actualArgvEnvelope = ConvertFrom-Json -InputObject ([IO.File]::ReadAllText((Join-Path $helperRoot 'argv.json')))
+  $actualArgv = [string[]]@($actualArgvEnvelope.argv)
   if ($actualArgv.Count -ne $payloadArgv.Count) { throw "Generated launcher changed provider argv count; expected: $($payloadArgv.Count); actual: $($actualArgv.Count)" }
   for ($i = 0; $i -lt $payloadArgv.Count; $i++) {
-    if ([string]$actualArgv[$i] -cne [string]$payloadArgv[$i]) { throw "Generated launcher changed provider argv at index $i; expected: $($payloadArgv[$i]); actual: $($actualArgv[$i])" }
+    if ([string]$actualArgv[$i] -cne [string]$payloadArgv[$i]) { throw "Generated launcher changed provider argv at index $i" }
   }
   $exePath = Join-Path $env:SystemRoot 'System32\cmd.exe'
   $exeLaunch = New-ProviderLaunchInvocation -ProviderArgv ([string[]]@($exePath, '--version')) -SystemRoot $env:SystemRoot

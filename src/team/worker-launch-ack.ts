@@ -47,11 +47,27 @@ export function buildWindowsSupervisorSource(): string {
     '$payloadLine = $bootstrapReader.ReadLine()',
     'Write-WorkerLaunchStage "input-payload-read"',
     'if ($null -eq $payloadLine) { throw "worker_launch_authority_lost" }',
-    '$payload = $payloadLine | ConvertFrom-Json',
-    '$json = $payload.canonical_json',
+    'Write-WorkerLaunchStage "outer-payload-parse-started"',
+    '$payload = ConvertFrom-Json -InputObject $payloadLine',
+    'Write-WorkerLaunchStage "outer-payload-parse-complete"',
+    'Write-WorkerLaunchStage "digest-input-started"',
+    '$json = $payload.canonical_json; $expectedDigest = $payload.authority_digest',
+    'Write-WorkerLaunchStage "digest-input-complete"',
+    'Write-WorkerLaunchStage "digest-hash-started"',
     '$hash = ([Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes($json)) | ForEach-Object { $_.ToString("x2") }) -join ""',
-    'if ($hash -ne $payload.authority_digest) { throw "worker_launch_authority_digest_mismatch" }',
-    '$authority = $json | ConvertFrom-Json; if ($authority.provider_argv.Count -ne $payload.provider_argv.Count) { throw "worker_launch_authority_argv_mismatch" }; for ($i = 0; $i -lt $authority.provider_argv.Count; $i++) { if ([string]$authority.provider_argv[$i] -cne [string]$payload.provider_argv[$i]) { throw "worker_launch_authority_argv_mismatch" } }',
+    'Write-WorkerLaunchStage "digest-hash-complete"',
+    'Write-WorkerLaunchStage "digest-compare-started"',
+    'if ($hash -ne $expectedDigest) { throw "worker_launch_authority_digest_mismatch" }',
+    'Write-WorkerLaunchStage "digest-compare-complete"',
+    'Write-WorkerLaunchStage "inner-authority-parse-started"',
+    '$authority = ConvertFrom-Json -InputObject $json',
+    'Write-WorkerLaunchStage "inner-authority-parse-complete"',
+    'Write-WorkerLaunchStage "argv-count-validation-started"',
+    'if ($authority.provider_argv.Count -ne $payload.provider_argv.Count) { throw "worker_launch_authority_argv_mismatch" }',
+    'Write-WorkerLaunchStage "argv-count-validation-complete"',
+    'Write-WorkerLaunchStage "argv-value-validation-started"',
+    'for ($i = 0; $i -lt $authority.provider_argv.Count; $i++) { if ([string]$authority.provider_argv[$i] -cne [string]$payload.provider_argv[$i]) { throw "worker_launch_authority_argv_mismatch" } }',
+    'Write-WorkerLaunchStage "argv-value-validation-complete"',
     'Write-WorkerLaunchStage "authority-validated"',
     String.raw`function New-ProviderLaunchInvocation {
   param([string[]]$ProviderArgv, [string]$SystemRoot, [string]$TempRoot, [string]$TempEnvironmentVariable)
@@ -71,13 +87,14 @@ export function buildWindowsSupervisorSource(): string {
   if (-not [System.IO.File]::Exists($powerShellPath)) { throw "worker_launch_provider_executable_invalid" }
   $launcherName = 'omc-worker-' + [Guid]::NewGuid().ToString('N') + '.ps1'
   $launcherPath = [System.IO.Path]::Combine($TempRoot, $launcherName)
-  $argvJson = ConvertTo-Json -InputObject @($ProviderArgv) -Compress
+  $argvJson = ConvertTo-Json -InputObject @{ argv = @($ProviderArgv) } -Compress
   $argvBase64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($argvJson))
   $commandShellBase64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($cmdPath))
   $scriptTemplate = @'
 $ErrorActionPreference = "Stop"
 $env:ComSpec = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String("__COMSPEC_BASE64__"))
-$providerArgv = @([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String("__ARGV_BASE64__")) | ConvertFrom-Json)
+$argvEnvelope = ConvertFrom-Json -InputObject ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String("__ARGV_BASE64__")))
+$providerArgv = [string[]]@($argvEnvelope.argv)
 $providerPath = [string]$providerArgv[0]
 $providerArguments = [string[]]@($providerArgv | Select-Object -Skip 1)
 $originalInputEncoding = [Console]::InputEncoding
