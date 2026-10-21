@@ -49,6 +49,11 @@ function getGlobalNodeModuleRoots() {
   addPrefixRoots(process.env.npm_config_prefix);
   addPrefixRoots(process.env.PREFIX);
 
+  // The Node install prefix is a global npm prefix for nvm/fnm users whose hook PATH lacks npm.
+  if (process.platform !== "win32") {
+    roots.push(join(dirname(process.execPath), "..", "lib", "node_modules"));
+  }
+
   if (process.platform === "win32" && process.env.APPDATA && isAbsolute(process.env.APPDATA)) {
     roots.push(join(process.env.APPDATA, "npm", "node_modules"));
   }

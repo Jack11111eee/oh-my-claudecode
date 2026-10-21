@@ -13,7 +13,7 @@
 
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, copyFileSync, readFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, copyFileSync, readFileSync, existsSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -117,13 +117,14 @@ function runWrapper(
   wrapperPath: string,
   env: Record<string, string | undefined>,
   cwd = process.cwd(),
+  nodeBin = process.execPath,
 ) {
   // Sanitize env: drop undefined keys.
   const finalEnv: Record<string, string> = {};
   for (const [k, v] of Object.entries(env)) {
     if (typeof v === 'string') finalEnv[k] = v;
   }
-  return spawnSync(process.execPath, [wrapperPath], {
+  return spawnSync(nodeBin, [wrapperPath], {
     input: STDIN_PAYLOAD,
     encoding: 'utf8',
     env: finalEnv,
@@ -295,6 +296,33 @@ describe('HUD wrapper — OMC_PLUGIN_ROOT resolution', () => {
     expect(earlierFailureLines).toHaveLength(1);
     expect(earlierFailureLines[0]).toContain(failingHudPath);
     expect(earlierFailureLines[0]).toContain('plugin root import failed');
+  });
+
+  it.skipIf(process.platform !== 'linux')('loads from the Node install prefix when npm is unavailable', () => {
+    const s = staged!;
+    const nodePrefix = join(s.dir, 'node-install-prefix');
+    const nodeBinDir = join(nodePrefix, 'bin');
+    const nodeBin = join(nodeBinDir, 'node');
+    const projectDir = join(s.dir, 'untrusted-project');
+    const fakeHome = join(s.dir, 'home');
+    const emptyPath = join(s.dir, 'empty-path');
+    const globalNodeModules = join(nodePrefix, 'lib', 'node_modules');
+    mkdirSync(nodeBinDir, { recursive: true });
+    mkdirSync(projectDir, { recursive: true });
+    mkdirSync(fakeHome, { recursive: true });
+    mkdirSync(emptyPath, { recursive: true });
+    copyFileSync(process.execPath, nodeBin);
+    chmodSync(nodeBin, 0o755);
+    writeHudPackage(globalNodeModules, 'oh-my-claude-sisyphus', 'FROM_NODE_INSTALL_PREFIX');
+
+    const result = runWrapper(s.wrapperPath, scrubbedEnv({
+      PATH: emptyPath,
+      HOME: fakeHome,
+      CLAUDE_CONFIG_DIR: join(s.dir, 'isolated-config-node-prefix'),
+    }), projectDir, nodeBin);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('FROM_NODE_INSTALL_PREFIX');
   });
 
   it('case 6: cache step is semver-aware — stable beats prerelease with same [M.m.p]', () => {
