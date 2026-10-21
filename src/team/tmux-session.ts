@@ -1155,6 +1155,12 @@ export async function invokeDirectMailboxEffect(
     if (membership.kind !== 'owned') {
       return { kind: 'not_attempted', reason: 'mailbox_membership_unresolvable' };
     }
+    const inputBlockReason = await paneInputBlockReason(
+      target.paneId,
+      tmuxServerIdentity,
+      dependencies.serverIdentityDependencies,
+    );
+    if (inputBlockReason) return { kind: 'not_attempted', reason: inputBlockReason };
     const text = target.recipientRole === 'leader'
       ? `[OMC_TMUX_INJECT] ${message}`.slice(0, 200)
       : message;
@@ -3162,6 +3168,7 @@ async function capturePaneObservation(
     joinWrappedLines?: boolean;
     operation?: string;
     tmuxServerIdentity?: TmuxServerIdentity;
+    serverIdentityDependencies?: TmuxServerIdentityDependencies;
   } = {},
 ): Promise<PaneCaptureObservation> {
   try {
@@ -3170,7 +3177,7 @@ async function capturePaneObservation(
     }
     if (opts.tmuxServerIdentity) {
       if (!isValidTmuxServerIdentity(opts.tmuxServerIdentity)
-        || await observeTmuxServerIdentity(opts.tmuxServerIdentity) !== 'matching') {
+        || await observeTmuxServerIdentity(opts.tmuxServerIdentity, opts.serverIdentityDependencies) !== 'matching') {
         return { ok: false, error: 'tmux_server_identity_unverified' };
       }
     }
@@ -3184,7 +3191,7 @@ async function capturePaneObservation(
       )
       : await tmuxExecAsync(args);
     if (opts.tmuxServerIdentity
-      && await observeTmuxServerIdentity(opts.tmuxServerIdentity) !== 'matching') {
+      && await observeTmuxServerIdentity(opts.tmuxServerIdentity, opts.serverIdentityDependencies) !== 'matching') {
       return { ok: false, error: 'tmux_server_identity_changed' };
     }
     return { ok: true, captured: result.stdout };
@@ -3257,13 +3264,7 @@ async function guardedSendLiteralAndEnter(
   text: string,
   tmuxServerIdentity: TmuxServerIdentity,
 ): Promise<boolean> {
-  if (!isValidTmuxServerIdentity(tmuxServerIdentity)
-    || await observeTmuxServerIdentity(tmuxServerIdentity) !== 'matching') return false;
-  const observation = await capturePaneObservation(paneId, {
-    operation: 'guarded-notification',
-    tmuxServerIdentity,
-  });
-  if (!observation.ok || detectPaneTrustPromptKind(observation.captured) === 'codex_directory') return false;
+  if (await paneInputBlockReason(paneId, tmuxServerIdentity)) return false;
   const literal = await runGuardedNativeTmuxCommand(
     tmuxServerIdentity,
     tmuxCommandString(['send-keys', '-t', paneId, '-l', '--', text]),
@@ -3274,6 +3275,23 @@ async function guardedSendLiteralAndEnter(
     tmuxCommandString(['send-keys', '-t', paneId, 'Enter']),
   );
   return enter.outcome === 'executed';
+}
+
+async function paneInputBlockReason(
+  paneId: string,
+  tmuxServerIdentity: TmuxServerIdentity,
+  serverIdentityDependencies?: TmuxServerIdentityDependencies,
+): Promise<'mailbox_membership_unresolvable' | 'codex_workspace_untrusted' | undefined> {
+  const observation = await capturePaneObservation(paneId, {
+    operation: 'guarded-notification',
+    tmuxServerIdentity,
+    ...(serverIdentityDependencies ? { serverIdentityDependencies } : {}),
+  });
+  if (!observation.ok) return 'mailbox_membership_unresolvable';
+  if (detectPaneTrustPromptKind(observation.captured) === 'codex_directory') {
+    return 'codex_workspace_untrusted';
+  }
+  return undefined;
 }
 
 export async function killTeamPane(paneId: string): Promise<void> {
