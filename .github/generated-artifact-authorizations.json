@@ -7,12 +7,12 @@
       "pullNumber": 4506,
       "targetRef": "dev",
       "mergeBaseSha": "37e1f365fe384d7025a6ee56d2b20b2bf5d2644b",
-      "headSha": "7051ef9915b858cf8871de7bef2095623f1e20e1",
+      "headSha": "74c274fd82e2d71192d3b5a355fab9bd052dbe55",
       "owner": "Yeachan-Heo",
-      "expiresAt": "2027-01-01T00:00:00.000Z",
+      "expiresAt": "2027-01-01T00:00:00Z",
       "generatedDelta": {
         "count": 0,
-        "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
       },
       "generatedFiles": []
     },
