@@ -7,6 +7,7 @@ import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { PassThrough } from 'node:stream';
+import { gunzipSync } from 'node:zlib';
 
 import * as processUtils from '../../platform/process-utils.js';
 import {
@@ -2439,6 +2440,16 @@ describe('worker launch acknowledgement', () => {
     const invocation = buildWindowsSupervisorInvocation(consumed, baselineEnv);
     if (!invocation.stdinPayload) throw new Error('worker_launch_test_supervisor_payload_missing');
     expect(invocation.command.length + invocation.args.join(' ').length + 16).toBeLessThan(32_767);
+    const encodedLoader = invocation.args.at(-1);
+    if (!encodedLoader) throw new Error('worker_launch_test_supervisor_loader_missing');
+    const loader = Buffer.from(encodedLoader, 'base64').toString('utf16le');
+    const compressedSource = loader.match(/FromBase64String\('([^']+)'\)/)?.[1];
+    if (!compressedSource) throw new Error('worker_launch_test_supervisor_source_missing');
+    const source = gunzipSync(Buffer.from(compressedSource, 'base64')).toString('utf8');
+    expect(source).toBe(buildWindowsSupervisorSource());
+    const inputReadyMarker = source.indexOf('[Console]::Out.WriteLine("worker-launch-input-ready-v1"); [Console]::Out.Flush()');
+    expect(inputReadyMarker).toBeGreaterThan(-1);
+    expect(inputReadyMarker).toBeLessThan(source.indexOf('Add-Type @"'));
     const payload = JSON.parse(invocation.stdinPayload) as {
       canonical_json: string;
       authority_digest: string;

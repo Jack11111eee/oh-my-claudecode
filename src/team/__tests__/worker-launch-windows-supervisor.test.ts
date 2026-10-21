@@ -13,17 +13,21 @@ describe('generated Windows worker supervisor', () => {
     expect(source).toContain(String.raw`if (c == '\\')`);
     expect(source).toContain('[uint32]::MaxValue');
     expect(source).not.toContain('[uint32]0xffffffff');
-    expect(source).toContain('System.Console.SetIn(new System.IO.StreamReader(System.Console.OpenStandardInput(), new System.Text.UTF8Encoding(false), true))');
+    expect(source).toContain('new System.IO.StreamReader(System.Console.OpenStandardInput(), new System.Text.UTF8Encoding(false), true)');
     expect(source).toContain('[O]::ReadLineAsync()');
-    expect(source).toContain('Task.Run(() => Console.In.ReadLine())');
-    const initializeInput = source.indexOf('[WorkerLaunchInput]::Initialize()');
+    expect(source).toContain('Task.Run(() => input.ReadLine())');
+    expect(source).not.toContain('System.Console.SetIn(');
     const inputReadyMarker = source.indexOf('[Console]::Out.WriteLine("worker-launch-input-ready-v1"); [Console]::Out.Flush()');
+    const inputHelper = source.indexOf('Add-Type @"');
+    const initializeInput = source.indexOf('[WorkerLaunchInput]::Initialize()');
     const readBootstrapPayload = source.indexOf('$payloadLine = [WorkerLaunchInput]::ReadLineAsync().GetAwaiter().GetResult()');
+    expect(inputReadyMarker).toBeGreaterThan(source.indexOf('$ErrorActionPreference = "Stop"'));
+    expect(inputReadyMarker).toBeLessThan(inputHelper);
+    expect(inputHelper).toBeLessThan(initializeInput);
     expect(initializeInput).toBeGreaterThan(-1);
-    expect(inputReadyMarker).toBeGreaterThan(initializeInput);
-    expect(inputReadyMarker).toBeLessThan(readBootstrapPayload);
     expect(readBootstrapPayload).toBeGreaterThan(-1);
-    expect(initializeInput).toBeLessThan(source.indexOf('$readTask = [O]::ReadLineAsync()'));
+    expect(initializeInput).toBeLessThan(readBootstrapPayload);
+    expect(readBootstrapPayload).toBeLessThan(source.indexOf('$readTask = [O]::ReadLineAsync()'));
     expect(source).toContain('$payloadLine = [WorkerLaunchInput]::ReadLineAsync().GetAwaiter().GetResult()');
     expect(source).not.toContain('[System.Threading.Tasks.Task]::Run([System.Func[string]]');
     expect(source).toContain('CreateFileW("CONIN$",');
@@ -39,7 +43,7 @@ describe('generated Windows worker supervisor', () => {
     expect(source).toContain(' /d /v:off /s /c ""');
     expect(source).not.toContain("'call ' + $quotedArgv");
     expect(source).toContain('chcp 65001 >nul');
-    expect(source).toContain(String.raw` /s /c "call "`);
+    expect(source).toContain(String.raw` /s /c ""`);
 
   });
 
@@ -76,7 +80,7 @@ try {
   $batchPath = $launch.batch_path
   if ($launch.provider_argv.Count -ne 8) { throw 'Expected the validated provider argv to remain intact' }
   if ($launch.application_path -ne (Join-Path $env:SystemRoot 'System32\cmd.exe')) { throw 'Expected absolute System32 cmd.exe' }
-  if ($launch.command_line -notmatch ' /s /c "call "%TEMP%\\omc-worker-[0-9a-f]+\.cmd""$') { throw "Expected cmd.exe /s /c call quoting without CRT-escaped quotes; command line: $($launch.command_line)" }
+  if ($launch.command_line -notmatch ' /s /c ""%TEMP%\\omc-worker-[0-9a-f]+\.cmd""$') { throw "Expected cmd.exe /s /c wrapper quoting without CRT-escaped quotes; command line: $($launch.command_line)" }
   if ($launch.command_line.Contains('\\"')) { throw 'Expected cmd.exe command tail to avoid CRT quote escaping' }
   $batch = [IO.File]::ReadAllText($batchPath)
   foreach ($literal in @('chcp 65001 >nul', '100%%%% ready', '%%%%USERPROFILE%%%%', 'bang!', 'caret^^', 'say ""hello"" & continue', 'two words', 'Grüße-λ-漢字')) {

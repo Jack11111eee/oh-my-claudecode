@@ -39,11 +39,11 @@ const WINDOWS_SUPERVISOR_INPUT_READY_MARKER = 'worker-launch-input-ready-v1';
 export function buildWindowsSupervisorSource(): string {
   return [
     '$ErrorActionPreference = "Stop"',
+    '[Console]::Out.WriteLine("' + WINDOWS_SUPERVISOR_INPUT_READY_MARKER + '"); [Console]::Out.Flush()',
     'Add-Type @"',
-    'public static class WorkerLaunchInput { public static void Initialize() { System.Console.SetIn(new System.IO.StreamReader(System.Console.OpenStandardInput(), new System.Text.UTF8Encoding(false), true)); } public static System.Threading.Tasks.Task<string> ReadLineAsync() { return System.Threading.Tasks.Task.Run(() => System.Console.In.ReadLine()); } }',
+    'public static class WorkerLaunchInput { private static System.IO.StreamReader input; public static void Initialize() { input = new System.IO.StreamReader(System.Console.OpenStandardInput(), new System.Text.UTF8Encoding(false), true); } public static System.Threading.Tasks.Task<string> ReadLineAsync() { return System.Threading.Tasks.Task.Run(() => input.ReadLine()); } }',
     '"@',
     '[WorkerLaunchInput]::Initialize()',
-    '[Console]::Out.WriteLine("' + WINDOWS_SUPERVISOR_INPUT_READY_MARKER + '"); [Console]::Out.Flush()',
     '$payloadLine = [WorkerLaunchInput]::ReadLineAsync().GetAwaiter().GetResult()',
     'if ($null -eq $payloadLine) { throw "worker_launch_authority_lost" }',
     '$payload = $payloadLine | ConvertFrom-Json',
@@ -86,9 +86,9 @@ function New-ProviderLaunchInvocation {
   }
   $batchCommand = '%' + $TempEnvironmentVariable + '%\' + $batchName
   $commandPrefix = [O]::BuildCommandLine([string[]]@($cmdPath))
-  # /s strips the command string's outer quotes, leaving call and the wrapper
-  # path quoted after TEMP/TMP expansion even when the temp directory has spaces.
-  $commandLine = $commandPrefix + ' /d /v:off /s /c "call "' + $batchCommand + '""'
+  # /s strips the command string's outer quotes, leaving the wrapper path
+  # quoted after TEMP/TMP expansion even when the temp directory has spaces.
+  $commandLine = $commandPrefix + ' /d /v:off /s /c ""' + $batchCommand + '""'
   return @{ provider_argv = $ProviderArgv; application_path = $cmdPath; command_line = $commandLine; batch_path = $batchPath }
 }`,
     'Add-Type @"',
