@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
+import { composeManagedBlock } from '../composer.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const computedRoot = join(__dirname, '../../..');
@@ -17,16 +18,17 @@ const root = (() => {
 })();
 
 describe('prompt projection fixtures', () => {
-  it('golden managed block matches composed projection from canonical', () => {
+  it('golden managed block matches composed projection independent of package version', () => {
     const golden = readFileSync(join(root, 'tests/fixtures/prompt-projection/claude-managed-block.golden'), 'utf8');
-    // golden was generated as deterministic projection from docs canonical; verify via composer module
-    // Import dynamically to avoid circular, but we can just check golden contains markers and version
+    const docsRaw = readFileSync(join(root, 'docs/CLAUDE.md'), 'utf8');
+    const versionPlaceholder = '<version>';
+    const expected = composeManagedBlock({ canonicalDocsRaw: docsRaw, version: versionPlaceholder });
+    expect(golden).toBe(expected);
+  });
+  it('canonical docs version matches package.json', () => {
+    const docsRaw = readFileSync(join(root, 'docs/CLAUDE.md'), 'utf8');
     const pkgVer = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version as string;
-    expect(golden).toContain('<!-- OMC:START -->');
-    expect(golden).toContain(`<!-- OMC:VERSION:${pkgVer} -->`);
-    expect(golden).toContain('<!-- OMC:END -->');
-    const docsBody = readFileSync(join(root, 'tests/fixtures/prompt-projection/claude-body.normalized'), 'utf8');
-    expect(golden).toContain(docsBody.trim().split('\n')[0].slice(0,20));
+    expect(docsRaw).toContain(`<!-- OMC:VERSION:${pkgVer} -->`);
   });
   it('normalized body fixture matches docs canonical body', () => {
     const docsRaw = readFileSync(join(root, 'docs/CLAUDE.md'), 'utf8');
