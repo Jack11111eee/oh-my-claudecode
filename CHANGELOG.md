@@ -1,9 +1,11 @@
-## [Unreleased]
+# Unreleased
 
 ### Fixed
 
-- Submit team startup inboxes with Enter; shorten only overflowing Windows notifications while preserving launch markers.
-- Treat Codex folder-trust prompts as user-controlled and never type task text or grant trust through them.
+- Repair native Windows worker supervisor generation, console handle isolation, process cleanup, and provider exit status.
+- Compress the source-bound supervisor invocation to fit Windows command-line limits and reject unresolved native provider executables.
+- Submit tmux startup inboxes with Enter; shorten only overflowing Windows inbox notifications using the supplied state-root environment variable.
+- Recognize Codex folder-trust prompts without delivering task text or granting persistent trust.
 
 ---
 
