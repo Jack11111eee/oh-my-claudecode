@@ -3827,7 +3827,9 @@ export async function sendToWorker(
     }
 
     // Check for trust prompt and auto-dismiss before sending our text
-    const initialCapture = await capturePaneAsync(paneId);
+    const initialObservation = await capturePaneObservation(paneId, { operation: 'worker-direct-send' });
+    if (!initialObservation.ok || !initialObservation.captured.trim()) return false;
+    const initialCapture = initialObservation.captured;
     if (paneHasClaudeStartupBanner(initialCapture)) {
       return false;
     }
@@ -3864,6 +3866,11 @@ export async function sendToWorker(
 
     // Allow input buffer to settle
     await sleep(150);
+
+    const preSubmitObservation = await capturePaneObservation(paneId, { operation: 'worker-direct-submit' });
+    if (!preSubmitObservation.ok
+      || !preSubmitObservation.captured.trim()
+      || paneHasTrustPrompt(preSubmitObservation.captured)) return false;
 
     // Submit: up to 6 rounds of C-m double-press.
     // For busy panes, first round uses Tab+C-m (queue semantics).
