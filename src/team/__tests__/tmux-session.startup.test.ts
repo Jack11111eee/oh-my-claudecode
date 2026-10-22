@@ -705,6 +705,24 @@ describe('worker pane startup safety', () => {
     expect(paneLooksReady(capture, 'codex')).toBe(false);
     expect(paneHasActiveTask(capture, 'codex')).toBe(false);
     expect(paneHasTrustPrompt(capture, 'claude')).toBe(false);
+    const partialCapture = ['Trust this folder?', '› 1. Trust and continue'].join('\n');
+    expect(paneHasTrustPrompt(partialCapture, 'codex')).toBe(true);
+    expect(paneLooksReady(partialCapture, 'codex')).toBe(false);
+    tmuxState.args = [];
+    tmuxState.captures = [partialCapture];
+    await expect(deliverStartupInbox(context, 'List files and report the result.')).resolves.toEqual({
+      ok: false,
+      reason: 'codex_workspace_untrusted',
+    });
+    expect(tmuxState.args.some(args => args.includes('send-keys'))).toBe(false);
+
+    tmuxState.args = [];
+    tmuxState.captures = [partialCapture];
+    await expect(sendToWorker('', '%2', 'List files and report the result.', context.ownership.tmuxServerIdentity))
+      .resolves.toBe(false);
+    expect(tmuxState.args.some(args => args.includes('send-keys'))).toBe(false);
+
+    tmuxState.args = [];
     await expect(deliverStartupInbox(context, 'List files and report the result.')).resolves.toEqual({
       ok: false,
       reason: 'codex_workspace_untrusted',
