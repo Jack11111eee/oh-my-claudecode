@@ -711,6 +711,8 @@ describe('worker pane startup safety', () => {
       ['Trust this folder?', '› 1. Trust and', 'continue'].join('\n'),
       ['Trust this folder?', '› 1. Trust and'].join('\n'),
       ['Trust this folder?', '› 1.'].join('\n'),
+      ['Trust this folder?', '› 1'].join('\n'),
+      ['Trust this folder?', '›'].join('\n'),
     ];
     for (const partialCapture of partialCaptures) {
       expect(paneHasTrustPrompt(partialCapture, 'codex')).toBe(true);
