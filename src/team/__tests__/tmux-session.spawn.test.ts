@@ -707,4 +707,36 @@ describe('sendToWorker cmux trust guards', () => {
       .toEqual([['send-surface', '--surface', 'surface-worker-1', message]]);
     expect(mockedCalls.cmuxArgs.some(args => args[0] === 'send-key-surface' || args[0] === 'send-key')).toBe(false);
   });
+
+  it('does not send the next cmux submit key if trust appears between Enter keys', async () => {
+    const message = 'Read inbox.md, execute now.';
+    const trustSelector = [
+      'Folder access', 'D:\\test\\repo',
+      'Trust this folder? Codex can read, edit, and',
+      'run files here, subject to your permission',
+      'settings. Folder settings can run code',
+      'automatically, even without a model request.',
+      '› 1. Trust and continue', '  2. Quit',
+    ].join('\n');
+    mockedCalls.cmuxCaptures = ['› ready\n', '› ready\n', '› ready\n', trustSelector];
+
+    await expect(sendToWorker('cmux:workspace-1', 'surface-worker-1', message)).resolves.toBe(false);
+
+    const submitKeys = mockedCalls.cmuxArgs
+      .filter(args => args[0] === 'send-key-surface' || args[0] === 'send-key')
+      .map(args => args.at(-1));
+    expect(submitKeys).toEqual(['enter']);
+  });
+
+  it('does not treat an empty cmux post-submit capture as successful delivery', async () => {
+    const message = 'Read inbox.md, execute now.';
+    mockedCalls.cmuxCaptures = ['› ready\n', '› ready\n', '› ready\n', '› ready\n', ''];
+
+    await expect(sendToWorker('cmux:workspace-1', 'surface-worker-1', message)).resolves.toBe(false);
+
+    const submitKeys = mockedCalls.cmuxArgs
+      .filter(args => args[0] === 'send-key-surface' || args[0] === 'send-key')
+      .map(args => args.at(-1));
+    expect(submitKeys).toEqual(['enter', 'enter']);
+  });
 });

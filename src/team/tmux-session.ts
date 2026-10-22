@@ -3301,7 +3301,7 @@ async function paneInputBlockReason(
     tmuxServerIdentity,
     ...(serverIdentityDependencies ? { serverIdentityDependencies } : {}),
   });
-  if (!observation.ok) return 'mailbox_membership_unresolvable';
+  if (!observation.ok || !observation.captured.trim()) return 'mailbox_membership_unresolvable';
   if (detectPaneTrustPromptKind(observation.captured) === 'codex_directory') {
     return 'codex_workspace_untrusted';
   }
@@ -3872,25 +3872,35 @@ export async function sendToWorker(
       || !preSubmitObservation.captured.trim()
       || paneHasTrustPrompt(preSubmitObservation.captured)) return false;
 
+    const sendSubmitKey = async (key: string): Promise<boolean> => {
+      const observation = await capturePaneObservation(paneId, { operation: 'worker-direct-submit-key' });
+      if (!observation.ok || !observation.captured.trim() || paneHasTrustPrompt(observation.captured)) return false;
+      await sendKey(key);
+      return true;
+    };
+
     // Submit: up to 6 rounds of C-m double-press.
     // For busy panes, first round uses Tab+C-m (queue semantics).
     const submitRounds = 6;
     for (let round = 0; round < submitRounds; round++) {
       await sleep(100);
       if (round === 0 && paneBusy) {
-        await sendKey('Tab');
+        if (!await sendSubmitKey('Tab')) return false;
         await sleep(80);
-        await sendKey('C-m');
+        if (!await sendSubmitKey('C-m')) return false;
       } else {
-        await sendKey('C-m');
+        if (!await sendSubmitKey('C-m')) return false;
         await sleep(200);
-        await sendKey('C-m');
+        if (!await sendSubmitKey('C-m')) return false;
       }
       await sleep(140);
 
       // Check if text is still visible in the pane — if not, it was submitted
-      const checkCapture = await capturePaneAsync(paneId);
-      if (!paneTailContainsLiteralLine(checkCapture, message)) return true;
+      const checkObservation = await capturePaneObservation(paneId, { operation: 'worker-direct-submit-check' });
+      if (!checkObservation.ok
+        || !checkObservation.captured.trim()
+        || paneHasTrustPrompt(checkObservation.captured)) return false;
+      if (!paneTailContainsLiteralLine(checkObservation.captured, message)) return true;
 
       await sleep(140);
     }
