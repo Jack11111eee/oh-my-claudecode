@@ -747,6 +747,11 @@ describe('worker pane startup safety', () => {
     ].join('\n');
     expect(paneHasTrustPrompt(staleCapture, 'codex')).toBe(false);
     expect(paneLooksReady(staleCapture, 'codex')).toBe(true);
+    const staleBarePromptCapture = [
+      'Trust this folder?', '› 1. Trust and continue', '  2. Quit', '›',
+    ].join('\n');
+    expect(paneHasTrustPrompt(staleBarePromptCapture, 'codex')).toBe(false);
+    expect(paneLooksReady(staleBarePromptCapture, 'codex')).toBe(true);
 
     const quitSelectedCapture = capture
       .replace('› 1. Trust and continue', '  1. Trust and continue')

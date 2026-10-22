@@ -3370,8 +3370,14 @@ function detectPaneTrustPromptKind(captured: string, provider?: CliAgentType): P
   const lastCodexTrustQuestionIndex = lines.findLastIndex((line, index) =>
     /Trust this folder\?/i.test(lines.slice(index, index + 2).join(' ')),
   );
+  const previousTrustChoiceWasRendered = lastCodexTrustQuestionIndex >= 0
+    && lines.slice(lastCodexTrustQuestionIndex + 1, lastCodexPromptIndex).some(line => {
+      const prompt = line.replace(/^\s*(?:[│┃║▌▐▏▕╎┆┊]\s*)?[›>❯]\s*/, '');
+      return /^(?:1(?:\.|$)|2(?:\.|$))/i.test(prompt);
+    });
   const lastCodexPromptIsTrustChoice = lastCodexPromptIndex >= 0
-    && /^(?:1(?:\.|$)|2(?:\.|$)|$)/i.test(activeCodexPrompt);
+    && (/^(?:1(?:\.|$)|2(?:\.|$))/i.test(activeCodexPrompt)
+      || (activeCodexPrompt === '' && !previousTrustChoiceWasRendered));
   const codexTrustQuestionIsActive = lastCodexTrustQuestionIndex >= 0
     && (lastCodexPromptIndex < lastCodexTrustQuestionIndex || lastCodexPromptIsTrustChoice);
 
