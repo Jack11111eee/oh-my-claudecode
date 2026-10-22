@@ -117,13 +117,47 @@ $providerArgv = @($argvEnvelope.argv)
 $providerPath = [string]$providerArgv[0]
 $providerArguments = New-Object string[] ($providerArgv.Length - 1)
 [Array]::Copy($providerArgv, 1, $providerArguments, 0, $providerArguments.Length)
-# PowerShell 5.1 drops empty arguments at the batch boundary; preserve them as explicit CMD tokens.
-for ($i = 0; $i -lt $providerArguments.Length; $i++) {
-  if ($providerArguments[$i].Length -eq 0) { $providerArguments[$i] = '""' }
+function Escape-BatchMetachar([string]$value, [bool]$doubleEscape) {
+  $metacharSet = @([char]40, [char]41, [char]91, [char]93, [char]37, [char]33, [char]94, [char]96, [char]60, [char]62, [char]38, [char]124, [char]59, [char]44, [char]42, [char]63, [char]34)
+  $result = $value
+  foreach ($char in $metacharSet) {
+    $result = $result.Replace([string]$char, '^' + [string]$char)
+  }
+  if ($doubleEscape) {
+    foreach ($char in $metacharSet) {
+      $result = $result.Replace([string]$char, '^' + [string]$char)
+    }
+  }
+  return $result
 }
+function Escape-BatchArgument([string]$value) {
+  $quoted = '"' + $value.Replace([char]92, [char]92 + [char]92).Replace('"', '\"') + '"'
+  return Escape-BatchMetachar $quoted $true
+}
+function Escape-BatchCommand([string]$value) {
+  return Escape-BatchMetachar $value $false
+}
+$commandLine = Escape-BatchCommand $providerPath
+for ($i = 0; $i -lt $providerArguments.Length; $i++) {
+  $arg = [string]$providerArguments[$i]
+  if ($arg.Length -eq 0) { $arg = '""' }
+  $commandLine = $commandLine + ' ' + (Escape-BatchArgument $arg)
+}
+$startInfo = New-Object System.Diagnostics.ProcessStartInfo
+$startInfo.FileName = $env:ComSpec
+$startInfo.Arguments = '/d /v:off /s /c "' + $commandLine + '"'
+$startInfo.UseShellExecute = $false
 $exitCode = 1
-& $providerPath @providerArguments
-if ($null -eq $LASTEXITCODE) { $exitCode = 0 } else { $exitCode = [int]$LASTEXITCODE }
+try {
+  $process = [System.Diagnostics.Process]::Start($startInfo)
+  if ($null -ne $process) {
+    $process.WaitForExit()
+    $exitCode = $process.ExitCode
+    $process.Dispose()
+  }
+} catch {
+  $exitCode = 1
+}
 exit $exitCode
 '@
   $script = $scriptTemplate.Replace('__COMSPEC_BASE64__', $commandShellBase64).Replace('__ARGV_BASE64__', $argvBase64)

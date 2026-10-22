@@ -2585,7 +2585,8 @@ describe('worker launch acknowledgement', () => {
         expect(resume).toBeGreaterThan(assign);
         expect(source).toContain('TerminateJobObject');
         expect(source).toContain('if (-not [O]::TerminateJobObject');
-        expect(source).toContain('WaitForSingleObject($job, 5000)');
+        expect(source).toContain('[O]::WaitForJobEmpty($job, 5000)');
+        expect(source).not.toContain('WaitForSingleObject($job, 5000)');
         expect(source).toContain('worker_launch_job_cleanup_timeout');
         expect(source).toContain('process_start_identity=("ticks:" +');
         expect(source).toContain('instance_id=$payload.identity.instance_id');

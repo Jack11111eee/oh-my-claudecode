@@ -33631,13 +33631,28 @@ var import_path46 = require("path");
 // src/hooks/learner/constants.ts
 var import_path45 = require("path");
 var import_os6 = require("os");
+
+// src/utils/debug-flag.ts
+var DISABLED_VALUES = /* @__PURE__ */ new Set(["", "0", "false"]);
+function isDebugEnabled(scope) {
+  const raw = process.env.OMC_DEBUG;
+  if (raw === void 0) return false;
+  const value = raw.trim().toLowerCase();
+  if (DISABLED_VALUES.has(value)) return false;
+  if (value === "1" || value === "true") return true;
+  if (!scope) return false;
+  const wanted = scope.trim().toLowerCase();
+  return value.split(",").some((entry) => entry.trim() === wanted);
+}
+
+// src/hooks/learner/constants.ts
 var USER_SKILLS_DIR = (0, import_path45.join)(getClaudeConfigDir(), "skills", "omc-learned");
 var GLOBAL_SKILLS_DIR = (0, import_path45.join)((0, import_os6.homedir)(), ".omc", "skills");
 var PROJECT_SKILLS_SUBDIR = OmcPaths.SKILLS;
 var PROJECT_AGENT_SKILLS_SUBDIR = (0, import_path45.join)(".agents", "skills");
 var MAX_RECURSION_DEPTH = 10;
 var SKILL_EXTENSION = ".md";
-var DEBUG_ENABLED = process.env.OMC_DEBUG === "1";
+var DEBUG_ENABLED = isDebugEnabled("learner");
 
 // src/hooks/learner/finder.ts
 function findSkillFilesRecursive(dir, results, depth = 0) {

@@ -42,6 +42,8 @@ describe('generated Windows worker supervisor', () => {
     expect(source).toContain('$providerArguments = New-Object string[] ($providerArgv.Length - 1)');
     expect(source).toContain('[Array]::Copy($providerArgv, 1, $providerArguments, 0, $providerArguments.Length)');
     expect(source).toContain("if ($providerArguments[$i].Length -eq 0) { $providerArguments[$i] = '\"\"' }");
+    expect(source).toContain('[System.Diagnostics.ProcessStartInfo]');
+    expect(source).toContain('$startInfo.UseShellExecute = $false');
     expect(source).not.toContain('ConvertTo-Json -InputObject @($ProviderArgv) -Compress');
     expect(source).toContain('function Write-WorkerLaunchStage([string]$stage) { [Console]::Error.WriteLine("worker-launch-stage:" + $stage); [Console]::Error.Flush() }');
     expect(source).toContain('$payload = ConvertFrom-Json -InputObject $payloadLine');
@@ -73,10 +75,14 @@ describe('generated Windows worker supervisor', () => {
       previousStage = stageIndex;
     }
     expect(source.indexOf('Write-WorkerLaunchStage "authority-validated"')).toBeGreaterThan(previousStage);
-    expect(source).toContain('& $providerPath @providerArguments');
+    expect(source).toContain('$startInfo.FileName = $env:ComSpec');
+    expect(source).toContain('function Escape-BatchMetachar');
+    expect(source).toContain('function Escape-BatchArgument');
+    expect(source).toContain('function Escape-BatchCommand');
     expect(source).not.toContain('[Console]::InputEncoding =');
     expect(source).not.toContain('[Console]::OutputEncoding =');
-    expect(source).not.toContain(' /d /v:off /s /c');
+    expect(source).toContain('$startInfo.Arguments');
+    expect(source).not.toContain('& $providerPath @providerArguments');
     expect(source).not.toContain('$nestedCommand');
     expect(source).toContain('GetProcessTimes(IntPtr process');
     expect(source).not.toContain('Get-Process -Id');
