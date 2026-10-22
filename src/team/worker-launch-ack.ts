@@ -43,6 +43,9 @@ export function buildWindowsSupervisorSource(): string {
     'Write-WorkerLaunchStage "script-entry"',
     '[Console]::Out.WriteLine("' + WINDOWS_SUPERVISOR_INPUT_READY_MARKER + '"); [Console]::Out.Flush()',
     'Write-WorkerLaunchStage "input-payload-read-started"',
+    'Write-WorkerLaunchStage "module-import-started"',
+    'Import-Module Microsoft.PowerShell.Utility -ErrorAction Stop',
+    'Write-WorkerLaunchStage "module-import-complete"',
     '$bootstrapReader = [System.IO.StreamReader]::new([Console]::OpenStandardInput(), [System.Text.UTF8Encoding]::new($false), $true)',
     '$payloadLine = $bootstrapReader.ReadLine()',
     'Write-WorkerLaunchStage "input-payload-read"',
@@ -110,7 +113,7 @@ export function buildWindowsSupervisorSource(): string {
 $ErrorActionPreference = "Stop"
 $env:ComSpec = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String("__COMSPEC_BASE64__"))
 $argvEnvelope = ConvertFrom-Json -InputObject ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String("__ARGV_BASE64__")))
-$providerArgv = [string[]]$argvEnvelope.argv
+$providerArgv = @($argvEnvelope.argv)
 $providerPath = [string]$providerArgv[0]
 $providerArguments = New-Object string[] ($providerArgv.Length - 1)
 [Array]::Copy($providerArgv, 1, $providerArguments, 0, $providerArguments.Length)
@@ -160,6 +163,38 @@ exit $exitCode
   private struct STARTUPINFOEX {
     public STARTUPINFO StartupInfo;
     public IntPtr lpAttributeList;
+  }
+  [StructLayout(LayoutKind.Sequential)]
+  private struct JOBOBJECT_BASIC_ACCOUNTING_INFORMATION {
+    public long TotalUserTime;
+    public long TotalKernelTime;
+    public long ThisPeriodTotalUserTime;
+    public long ThisPeriodTotalKernelTime;
+    public uint TotalPageFaultCount;
+    public uint TotalProcesses;
+    public uint ActiveProcesses;
+    public uint TotalTerminatedProcesses;
+  }
+  [DllImport("kernel32.dll", SetLastError=true)]
+  private static extern bool QueryInformationJobObject(IntPtr job, int informationClass, IntPtr information, uint informationLength, IntPtr returnLength);
+  public static uint GetJobActiveProcessCount(IntPtr job) {
+    int size = Marshal.SizeOf(typeof(JOBOBJECT_BASIC_ACCOUNTING_INFORMATION));
+    IntPtr buffer = Marshal.AllocHGlobal(size);
+    try {
+      if (!QueryInformationJobObject(job, 1, buffer, (uint)size, IntPtr.Zero)) throw LaunchError("worker_launch_job_query_failed");
+      var information = (JOBOBJECT_BASIC_ACCOUNTING_INFORMATION)Marshal.PtrToStructure(buffer, typeof(JOBOBJECT_BASIC_ACCOUNTING_INFORMATION));
+      return information.ActiveProcesses;
+    } finally {
+      Marshal.FreeHGlobal(buffer);
+    }
+  }
+  public static void WaitForJobEmpty(IntPtr job, uint timeoutMilliseconds) {
+    var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+    while (true) {
+      if (GetJobActiveProcessCount(job) == 0) return;
+      if (stopwatch.ElapsedMilliseconds >= timeoutMilliseconds) throw new TimeoutException("worker_launch_job_cleanup_timeout");
+      System.Threading.Thread.Sleep(50);
+    }
   }
   [DllImport("kernel32.dll", SetLastError=true)]
   private static extern bool GetProcessTimes(IntPtr process, out FILETIME creation, out FILETIME exit, out FILETIME kernel, out FILETIME user);
@@ -253,7 +288,7 @@ exit $exitCode
     '  Write-WorkerLaunchStage "provider-resumed"',
     '  $ready = @{ protocol="' + WINDOWS_SUPERVISOR_PROTOCOL + '"; kind="ready"; attempt_id=$payload.identity.attempt_id; instance_id=$payload.identity.instance_id; authority_digest=$payload.authority_digest; containment_nonce=$payload.containment_nonce; pid=$pi.dwProcessId; process_start_identity=("ticks:" + $ticks) } | ConvertTo-Json -Compress; [Console]::Out.WriteLine($ready); [Console]::Out.Flush()',
     '  Write-WorkerLaunchStage "ready-frame-written"',
-    '  $readTask = [O]::ReadLineAsync(); while ($true) { if ([O]::WaitForSingleObject($pi.hProcess, 50) -eq 0) { $exitCode = [uint32]0; if (-not [O]::GetExitCodeProcess($pi.hProcess, [ref]$exitCode)) { throw "worker_launch_exit_code_failed" }; if (-not [O]::TerminateJobObject($job, $exitCode)) { throw "worker_launch_job_terminate_failed" }; if ([O]::WaitForSingleObject($job, 5000) -ne 0) { throw "worker_launch_job_cleanup_timeout" }; $terminal = @{ protocol="' + WINDOWS_SUPERVISOR_PROTOCOL + '"; kind="terminal"; attempt_id=$payload.identity.attempt_id; instance_id=$payload.identity.instance_id; authority_digest=$payload.authority_digest; containment_nonce=$payload.containment_nonce; pid=$pi.dwProcessId; outcome="exit"; cleanup_verified=$true; exit_code=$exitCode } | ConvertTo-Json -Compress; [Console]::Out.WriteLine($terminal); [Console]::Out.Flush(); break }; if (-not $readTask.IsCompleted) { continue }; $line = $readTask.Result; if ($null -eq $line) { throw "worker_launch_authority_lost" }; $readTask = [O]::ReadLineAsync(); if ([string]::IsNullOrWhiteSpace($line) -or $line.Length -gt 4096) { continue }; try { $msg = $line | ConvertFrom-Json } catch { continue }; if ($msg.protocol -ne "' + WINDOWS_SUPERVISOR_PROTOCOL + '" -or $msg.attempt_id -ne $payload.identity.attempt_id -or $msg.instance_id -ne $payload.identity.instance_id -or $msg.authority_digest -ne $payload.authority_digest -or $msg.containment_nonce -ne $payload.containment_nonce -or $msg.kind -ne "terminate") { continue }; if (-not [O]::TerminateJobObject($job, 1)) { throw "worker_launch_job_terminate_failed" }; if ([O]::WaitForSingleObject($job, 5000) -ne 0) { throw "worker_launch_job_cleanup_timeout" }; $terminal = @{ protocol="' + WINDOWS_SUPERVISOR_PROTOCOL + '"; kind="terminal"; attempt_id=$payload.identity.attempt_id; instance_id=$payload.identity.instance_id; authority_digest=$payload.authority_digest; containment_nonce=$payload.containment_nonce; pid=$pi.dwProcessId; outcome="terminated"; cleanup_verified=$true; exit_code=1 } | ConvertTo-Json -Compress; [Console]::Out.WriteLine($terminal); [Console]::Out.Flush(); break }',
+    '  $readTask = [O]::ReadLineAsync(); while ($true) { if ([O]::WaitForSingleObject($pi.hProcess, 50) -eq 0) { $exitCode = [uint32]0; if (-not [O]::GetExitCodeProcess($pi.hProcess, [ref]$exitCode)) { throw "worker_launch_exit_code_failed" }; if (-not [O]::TerminateJobObject($job, $exitCode)) { throw "worker_launch_job_terminate_failed" }; if (-not [O]::CloseHandle($pi.hProcess)) { throw "worker_launch_process_close_failed" }; $pi.hProcess = [IntPtr]::Zero; [O]::WaitForJobEmpty($job, 5000); $terminal = @{ protocol="' + WINDOWS_SUPERVISOR_PROTOCOL + '"; kind="terminal"; attempt_id=$payload.identity.attempt_id; instance_id=$payload.identity.instance_id; authority_digest=$payload.authority_digest; containment_nonce=$payload.containment_nonce; pid=$pi.dwProcessId; outcome="exit"; cleanup_verified=$true; exit_code=$exitCode } | ConvertTo-Json -Compress; [Console]::Out.WriteLine($terminal); [Console]::Out.Flush(); break }; if (-not $readTask.IsCompleted) { continue }; $line = $readTask.Result; if ($null -eq $line) { throw "worker_launch_authority_lost" }; $readTask = [O]::ReadLineAsync(); if ([string]::IsNullOrWhiteSpace($line) -or $line.Length -gt 4096) { continue }; try { $msg = $line | ConvertFrom-Json } catch { continue }; if ($msg.protocol -ne "' + WINDOWS_SUPERVISOR_PROTOCOL + '" -or $msg.attempt_id -ne $payload.identity.attempt_id -or $msg.instance_id -ne $payload.identity.instance_id -or $msg.authority_digest -ne $payload.authority_digest -or $msg.containment_nonce -ne $payload.containment_nonce -or $msg.kind -ne "terminate") { continue }; if (-not [O]::TerminateJobObject($job, 1)) { throw "worker_launch_job_terminate_failed" }; if (-not [O]::CloseHandle($pi.hProcess)) { throw "worker_launch_process_close_failed" }; $pi.hProcess = [IntPtr]::Zero; [O]::WaitForJobEmpty($job, 5000); $terminal = @{ protocol="' + WINDOWS_SUPERVISOR_PROTOCOL + '"; kind="terminal"; attempt_id=$payload.identity.attempt_id; instance_id=$payload.identity.instance_id; authority_digest=$payload.authority_digest; containment_nonce=$payload.containment_nonce; pid=$pi.dwProcessId; outcome="terminated"; cleanup_verified=$true; exit_code=1 } | ConvertTo-Json -Compress; [Console]::Out.WriteLine($terminal); [Console]::Out.Flush(); break }',
     '} catch { if ($pi.hProcess -ne [IntPtr]::Zero) { if ($jobAssigned) { [O]::TerminateJobObject($job, 1) | Out-Null } else { [O]::TerminateProcess($pi.hProcess, 1) | Out-Null }; [O]::WaitForSingleObject($pi.hProcess, 5000) | Out-Null }; throw } finally { if ($launcherPath) { Remove-Item -LiteralPath $launcherPath -Force -ErrorAction SilentlyContinue }; if ($envPtr -ne [IntPtr]::Zero) { [Runtime.InteropServices.Marshal]::FreeHGlobal($envPtr) }; if ($pi.hThread -ne [IntPtr]::Zero) { [O]::CloseHandle($pi.hThread) | Out-Null }; if ($pi.hProcess -ne [IntPtr]::Zero) { [O]::CloseHandle($pi.hProcess) | Out-Null }; if ($job -ne [IntPtr]::Zero) { [O]::CloseHandle($job) | Out-Null } }',
   ].join('\n');
 }

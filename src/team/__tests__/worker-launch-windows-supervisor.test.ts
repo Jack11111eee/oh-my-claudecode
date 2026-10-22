@@ -38,7 +38,7 @@ describe('generated Windows worker supervisor', () => {
     expect(source).toContain('New-ProviderLaunchInvocation');
     expect(source).toContain('ConvertTo-Json -InputObject @{ argv = @($ProviderArgv) } -Compress');
     expect(source).toContain('$argvEnvelope = ConvertFrom-Json -InputObject ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String("__ARGV_BASE64__")))');
-    expect(source).toContain('$providerArgv = [string[]]$argvEnvelope.argv');
+    expect(source).toContain('$providerArgv = @($argvEnvelope.argv)');
     expect(source).toContain('$providerArguments = New-Object string[] ($providerArgv.Length - 1)');
     expect(source).toContain('[Array]::Copy($providerArgv, 1, $providerArguments, 0, $providerArguments.Length)');
     expect(source).toContain("if ($providerArguments[$i].Length -eq 0) { $providerArguments[$i] = '\"\"' }");
@@ -80,6 +80,11 @@ describe('generated Windows worker supervisor', () => {
     expect(source).not.toContain('$nestedCommand');
     expect(source).toContain('GetProcessTimes(IntPtr process');
     expect(source).not.toContain('Get-Process -Id');
+    expect(source).toContain('QueryInformationJobObject(IntPtr job, int informationClass');
+    expect(source).toContain('return information.ActiveProcesses');
+    expect(source).toContain('if (-not [O]::CloseHandle($pi.hProcess)) { throw "worker_launch_process_close_failed" }; $pi.hProcess = [IntPtr]::Zero; [O]::WaitForJobEmpty($job, 5000)');
+    expect(source).toContain('[O]::WaitForJobEmpty($job, 5000)');
+    expect(source).not.toContain('[O]::WaitForSingleObject($job, 5000)');
     const createProvider = source.indexOf('[O]::CreateConsoleProcess(');
     const readStartIdentity = source.indexOf('$ticks = [O]::GetProcessStartTicks($pi.hProcess)');
     const resumeProvider = source.indexOf('[O]::ResumeThread($pi.hThread)');

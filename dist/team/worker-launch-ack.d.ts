@@ -77,6 +77,7 @@ export interface MaterializedProviderSpawnInvocation {
     command: string;
     args: string[];
     cleanup: () => Promise<void>;
+    env?: NodeJS.ProcessEnv;
     completionPath?: string;
     completionBinding?: WorkerLaunchCompletionBinding;
     stdinPayload?: string;

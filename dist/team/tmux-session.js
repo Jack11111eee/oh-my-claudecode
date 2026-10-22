@@ -2608,6 +2608,12 @@ async function guardedSendLiteralAndEnter(paneId, text, tmuxServerIdentity) {
     if (!isValidTmuxServerIdentity(tmuxServerIdentity)
         || await observeTmuxServerIdentity(tmuxServerIdentity) !== 'matching')
         return false;
+    const observation = await capturePaneObservation(paneId, {
+        operation: 'guarded-notification',
+        tmuxServerIdentity,
+    });
+    if (!observation.ok || detectPaneTrustPromptKind(observation.captured) === 'codex_directory')
+        return false;
     const literal = await runGuardedNativeTmuxCommand(tmuxServerIdentity, tmuxCommandString(['send-keys', '-t', paneId, '-l', '--', text]));
     if (literal.outcome !== 'executed')
         return false;
@@ -2663,6 +2669,15 @@ export async function killOwnedWorkerPane(ownership) {
 function detectPaneTrustPromptKind(captured, provider) {
     const lines = captured.split('\n').map(l => l.replace(/\r/g, '').trim()).filter(l => l.length > 0);
     const tail = lines.slice(-12);
+    const lastCodexPromptIndex = lines.findLastIndex(line => paneLineLooksLikeIdlePrompt(line, 'codex'));
+    const lastCodexPromptIsTrustChoice = lastCodexPromptIndex >= 0
+        && /\b(?:1\.\s*Trust and continue|2\.\s*Quit)\b/i.test(lines[lastCodexPromptIndex]);
+    if ((provider === undefined || provider === 'codex')
+        && lines.some(line => /^Trust this folder\?/i.test(line))
+        && lastCodexPromptIsTrustChoice
+        && tail.some(line => /\b2\.\s*Quit\b/i.test(line))) {
+        return 'codex_directory';
+    }
     const hasCursorTrustBanner = tail.some(l => /Workspace Trust Required/i.test(l));
     const hasCursorTrustHint = tail.some(l => /Pass\s+--trust,\s*--yolo,\s*or\s+-f/i.test(l));
     if ((provider === undefined || provider === 'cursor')
@@ -2754,10 +2769,10 @@ export function paneLooksReady(captured, provider) {
         .filter(line => line.trim() !== '');
     if (lines.length === 0)
         return false;
-    // A dismissible trust prompt still means the CLI is up and answering. The
-    // cursor workspace-trust banner is the opposite: the process already exited,
-    // so the pane is not ready and never will be without `--trust`.
-    if (detectPaneTrustPromptKind(content, provider) === 'cursor_workspace_trust')
+    // Dismissible trust prompts are still interactive. Cursor has exited, while
+    // Codex's folder-trust choice must be made by the user, so neither is ready.
+    const trustPrompt = detectPaneTrustPromptKind(content, provider);
+    if (trustPrompt === 'cursor_workspace_trust' || trustPrompt === 'codex_directory')
         return false;
     if (paneHasTrustPrompt(content, provider))
         return true;
@@ -2871,6 +2886,10 @@ export async function waitForStartupPaneReady(context, opts = {}) {
         const captured = observation.captured;
         const selector = detectPaneTrustPromptKind(captured, context.provider);
         if (selector) {
+            // This Codex dialog persists workspace trust and can enable folder
+            // settings. Never type a task or grant that trust on the user's behalf.
+            if (selector === 'codex_directory')
+                return { ok: false, reason: 'codex_workspace_untrusted' };
             // cursor-agent's workspace-trust banner has no selectable answer and the
             // process is already gone, so there is nothing to drive. Report it under
             // its own reason instead of blocking until readiness_timeout.
@@ -2915,9 +2934,9 @@ export async function deliverStartupInbox(context, message, options = {}) {
     try {
         await sendLiteralPaneText(context.ownership.paneId, message, context.ownership.tmuxServerIdentity);
         await sleep(100);
-        await sendTeamPaneKey(context.ownership.paneId, 'C-m', context.ownership.tmuxServerIdentity);
+        await sendTeamPaneKey(context.ownership.paneId, 'Enter', context.ownership.tmuxServerIdentity);
         await sleep(120);
-        await sendTeamPaneKey(context.ownership.paneId, 'C-m', context.ownership.tmuxServerIdentity);
+        await sendTeamPaneKey(context.ownership.paneId, 'Enter', context.ownership.tmuxServerIdentity);
         return { ok: true, kind: 'attempted_unconfirmed' };
     }
     catch (error) {
@@ -3036,6 +3055,8 @@ export async function sendToWorker(_sessionName, paneId, message, tmuxServerIden
         }
         const paneBusy = paneHasActiveTask(initialCapture);
         const trustPromptKind = detectPaneTrustPromptKind(initialCapture);
+        if (trustPromptKind === 'codex_directory')
+            return false;
         if (trustPromptKind === 'cursor_workspace_trust') {
             // Nothing to dismiss: cursor-agent printed the banner and exited. Sending
             // keys here would type into a dead pane.
