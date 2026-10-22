@@ -1,13 +1,30 @@
-## [Unreleased]
+# oh-my-claudecode v5.7.7: Codex hook compatibility and safer HUD loading
 
-### Fixed
+## Release Notes
 
-- Repair native Windows worker supervisor generation, console handle isolation, process cleanup, and provider exit status.
-- Compress the source-bound supervisor invocation to fit Windows command-line limits and reject unresolved native provider executables.
-- Submit tmux startup inboxes with Enter; shorten only overflowing Windows inbox notifications using the supplied state-root environment variable.
-- Recognize Codex folder-trust prompts without delivering task text or granting persistent trust.
+This release includes fixes for Codex hook output, HUD fallback security and reliability, configuration parsing, team shutdown validation, and plugin-only bootstrap.
+
+### Bug Fixes
+
+- **fix(hooks): emit Codex-compatible PreToolUse output** (#4489, fixes #4488)
+- **fix(hud): restrict npm fallback to the global prefix** (#4471, #4472)
+- **fix(hooks): fall back from blank shell config directory overrides** (#4474)
+- **fix(hooks): honor trailing commas in agent model JSONC** (#4473)
+- **fix(installer): recognize quoted Codex MCP keys** (#4469)
+- **fix(hud): report cached HUD load failures** (#4468)
+- **fix(skills): align argument hints with behavior** (#4465)
+- **fix(team): validate shutdown acknowledgements before consuming them** (#4462)
+- **fix(ultragoal): allow plugin-only bootstrap commands** (#4459)
+
+### Other Changes
+
+- **test(ci): make timing regression tests deterministic** (#4464)
+- **ci: canonicalize generated-artifact authorization expiry timestamps** (#4484)
+- **ci: sync the v5.7.6 main release back into dev** (#4485)
+- **chore(inventory): regenerate the inventory graph** (#4486)
 
 ---
+
 # oh-my-claudecode v5.7.6: Fix plugin-mode HUD loading and tighten input validation
 
 ## Release Notes
@@ -82,6 +99,7 @@ Release with **1 new feature**, **22 bug fixes**, **1 CI improvement**, and **1 
 - **25 PRs merged** | **1 new feature** | **22 bug fixes** | **1 CI improvement** | **1 retired-tools removal**
 
 ---
+
 # oh-my-claudecode v5.7.4: More reliable hooks, team workflows, HUD, and Jev planning
 
 ## Release Notes
@@ -121,6 +139,7 @@ Release with **1 new feature**, **4 bug fixes**, **1 performance improvement**, 
 - **9 PRs merged** | **1 new feature** | **4 bug fixes** | **1 performance improvement** | **3 test improvements**
 
 ---
+
 # oh-my-claudecode v5.7.3: Retire agent variant names, parallel consensus reviews
 
 ## Release Notes
