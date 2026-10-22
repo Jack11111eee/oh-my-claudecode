@@ -3664,6 +3664,31 @@ export async function waitForStartupPaneReady(
   return { ok: false, reason: 'readiness_timeout' };
 }
 
+async function startupPaneSubmitBlockReason(
+  context: StartupPaneContext,
+  attemptAlreadyFenced: boolean,
+): Promise<Extract<StartupPaneReadyResult, { ok: false }>['reason'] | undefined> {
+  if (!await startupContextIsActive(context, attemptAlreadyFenced)) return 'attempt_inactive';
+  const copyMode = await paneCopyModeObservation(
+    context.ownership.paneId,
+    context.ownership.tmuxServerIdentity,
+  );
+  if (copyMode === null) return 'copy_mode_unknown';
+  if (copyMode) return 'copy_mode';
+  const observation = await capturePaneObservation(context.ownership.paneId, {
+    operation: 'startup-submit',
+    ...(context.ownership.provider === 'tmux'
+      ? { tmuxServerIdentity: context.ownership.tmuxServerIdentity }
+      : {}),
+  });
+  if (!observation.ok || !observation.captured.trim()) return 'capture_failed';
+  const selector = detectPaneTrustPromptKind(observation.captured, context.provider);
+  if (selector === 'codex_directory') return 'codex_workspace_untrusted';
+  if (selector === 'cursor_workspace_trust') return 'cursor_workspace_untrusted';
+  if (selector) return 'selector_persistent';
+  return undefined;
+}
+
 export async function deliverStartupInbox(
   context: StartupPaneContext,
   message: string,
@@ -3673,15 +3698,26 @@ export async function deliverStartupInbox(
   const ready = await waitForStartupPaneReady(context, { attemptAlreadyFenced: options.attemptAlreadyFenced });
   if (!ready.ok) return { ok: false, reason: ready.reason };
   try {
+    const preInputBlockReason = await startupPaneSubmitBlockReason(
+      context,
+      options.attemptAlreadyFenced ?? false,
+    );
+    if (preInputBlockReason) return { ok: false, reason: preInputBlockReason };
     await sendLiteralPaneText(
       context.ownership.paneId,
       message,
       context.ownership.tmuxServerIdentity,
     );
     await sleep(100);
-    await sendTeamPaneKey(context.ownership.paneId, 'Enter', context.ownership.tmuxServerIdentity);
-    await sleep(120);
-    await sendTeamPaneKey(context.ownership.paneId, 'Enter', context.ownership.tmuxServerIdentity);
+    for (let submitIndex = 0; submitIndex < 2; submitIndex++) {
+      const submitBlockReason = await startupPaneSubmitBlockReason(
+        context,
+        options.attemptAlreadyFenced ?? false,
+      );
+      if (submitBlockReason) return { ok: false, reason: submitBlockReason };
+      await sendTeamPaneKey(context.ownership.paneId, 'Enter', context.ownership.tmuxServerIdentity);
+      if (submitIndex === 0) await sleep(120);
+    }
     return { ok: true, kind: 'attempted_unconfirmed' };
   } catch (error) {
     logWorkerSpawnDiagnostic(
