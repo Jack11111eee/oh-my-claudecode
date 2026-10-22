@@ -5,15 +5,15 @@
   "provenance": {
     "base": "05c800f40d1ad53b42a78609d2667ef4f726808b",
     "planningHead": "0a91273e61dbbd47eb0af4c02844409251e08398",
-    "head": "f7a17160243caec54f0c93b98fcc7a1d278e26c5",
-    "sourceSha256": "18d0334b51af65377e84b2605522fbe925af55ed79d042ad93c93221ccd90bda",
+    "head": "0f185b3533c07e96b9a369269f9f3be62055ec36",
+    "sourceSha256": "de4f7075e73b633cf67c13bbe8efa30dfef7dc385c70343f60ec800c382637b6",
     "generatedAt": null,
     "generator": "scripts/generate-inventory-graph.mjs"
   },
   "base": "05c800f40d1ad53b42a78609d2667ef4f726808b",
   "planningHead": "0a91273e61dbbd47eb0af4c02844409251e08398",
-  "head": "f7a17160243caec54f0c93b98fcc7a1d278e26c5",
-  "sourceSha256": "18d0334b51af65377e84b2605522fbe925af55ed79d042ad93c93221ccd90bda",
+  "head": "0f185b3533c07e96b9a369269f9f3be62055ec36",
+  "sourceSha256": "de4f7075e73b633cf67c13bbe8efa30dfef7dc385c70343f60ec800c382637b6",
   "counts": {
     "public": {
       "skills": 48,
@@ -28,8 +28,8 @@
       "toolFiles": 65,
       "libFiles": 48,
       "templateHooks": 24,
-      "srcFiles": 1472,
-      "total": 1496
+      "srcFiles": 1475,
+      "total": 1499
     },
     "generated": {
       "distFiles": 5735,
@@ -37292,6 +37292,11 @@
         "path": "node:async_hooks"
       },
       {
+        "id": "external:node:buffer",
+        "kind": "external",
+        "path": "node:buffer"
+      },
+      {
         "id": "external:node:child_process",
         "kind": "external",
         "path": "node:child_process"
@@ -37365,6 +37370,11 @@
         "id": "external:node:string_decoder",
         "kind": "external",
         "path": "node:string_decoder"
+      },
+      {
+        "id": "external:node:timers",
+        "kind": "external",
+        "path": "node:timers"
       },
       {
         "id": "external:node:url",
@@ -44717,6 +44727,11 @@
         "path": "src/team/__tests__/events.swallowed-error.test.ts"
       },
       {
+        "id": "src/team/__tests__/fixtures/windows-supervisor-runtime.mjs",
+        "kind": "src",
+        "path": "src/team/__tests__/fixtures/windows-supervisor-runtime.mjs"
+      },
+      {
         "id": "src/team/__tests__/followup-planner.test.ts",
         "kind": "src",
         "path": "src/team/__tests__/followup-planner.test.ts"
@@ -45240,6 +45255,16 @@
         "id": "src/team/__tests__/worker-launch-posix-transport.test.ts",
         "kind": "src",
         "path": "src/team/__tests__/worker-launch-posix-transport.test.ts"
+      },
+      {
+        "id": "src/team/__tests__/worker-launch-windows-runtime.test.ts",
+        "kind": "src",
+        "path": "src/team/__tests__/worker-launch-windows-runtime.test.ts"
+      },
+      {
+        "id": "src/team/__tests__/worker-launch-windows-supervisor.test.ts",
+        "kind": "src",
+        "path": "src/team/__tests__/worker-launch-windows-supervisor.test.ts"
       },
       {
         "id": "src/team/__tests__/worker-launch-wrapper-posix.test.ts",
@@ -78674,6 +78699,41 @@
         "kind": "imports"
       },
       {
+        "from": "src/team/__tests__/fixtures/windows-supervisor-runtime.mjs",
+        "to": "external:node:buffer",
+        "kind": "imports"
+      },
+      {
+        "from": "src/team/__tests__/fixtures/windows-supervisor-runtime.mjs",
+        "to": "external:node:child_process",
+        "kind": "imports"
+      },
+      {
+        "from": "src/team/__tests__/fixtures/windows-supervisor-runtime.mjs",
+        "to": "external:node:fs",
+        "kind": "imports"
+      },
+      {
+        "from": "src/team/__tests__/fixtures/windows-supervisor-runtime.mjs",
+        "to": "external:node:path",
+        "kind": "imports"
+      },
+      {
+        "from": "src/team/__tests__/fixtures/windows-supervisor-runtime.mjs",
+        "to": "external:node:process",
+        "kind": "imports"
+      },
+      {
+        "from": "src/team/__tests__/fixtures/windows-supervisor-runtime.mjs",
+        "to": "external:node:timers",
+        "kind": "imports"
+      },
+      {
+        "from": "src/team/__tests__/fixtures/windows-supervisor-runtime.mjs",
+        "to": "external:node:url",
+        "kind": "imports"
+      },
+      {
         "from": "src/team/__tests__/followup-planner.test.ts",
         "to": "external:fs",
         "kind": "imports"
@@ -82090,6 +82150,11 @@
       },
       {
         "from": "src/team/__tests__/worker-launch-ack.test.ts",
+        "to": "external:node:events",
+        "kind": "imports"
+      },
+      {
+        "from": "src/team/__tests__/worker-launch-ack.test.ts",
         "to": "external:node:fs",
         "kind": "imports"
       },
@@ -82106,6 +82171,16 @@
       {
         "from": "src/team/__tests__/worker-launch-ack.test.ts",
         "to": "external:node:path",
+        "kind": "imports"
+      },
+      {
+        "from": "src/team/__tests__/worker-launch-ack.test.ts",
+        "to": "external:node:stream",
+        "kind": "imports"
+      },
+      {
+        "from": "src/team/__tests__/worker-launch-ack.test.ts",
+        "to": "external:node:zlib",
         "kind": "imports"
       },
       {
@@ -82192,6 +82267,81 @@
         "from": "src/team/__tests__/worker-launch-posix-transport.test.ts",
         "to": "src/team/worker-launch-ack.ts",
         "kind": "type-imports"
+      },
+      {
+        "from": "src/team/__tests__/worker-launch-windows-runtime.test.ts",
+        "to": "external:node:child_process",
+        "kind": "imports"
+      },
+      {
+        "from": "src/team/__tests__/worker-launch-windows-runtime.test.ts",
+        "to": "external:node:crypto",
+        "kind": "imports"
+      },
+      {
+        "from": "src/team/__tests__/worker-launch-windows-runtime.test.ts",
+        "to": "external:node:fs",
+        "kind": "imports"
+      },
+      {
+        "from": "src/team/__tests__/worker-launch-windows-runtime.test.ts",
+        "to": "external:node:fs/promises",
+        "kind": "imports"
+      },
+      {
+        "from": "src/team/__tests__/worker-launch-windows-runtime.test.ts",
+        "to": "external:node:os",
+        "kind": "imports"
+      },
+      {
+        "from": "src/team/__tests__/worker-launch-windows-runtime.test.ts",
+        "to": "external:node:path",
+        "kind": "imports"
+      },
+      {
+        "from": "src/team/__tests__/worker-launch-windows-runtime.test.ts",
+        "to": "external:node:url",
+        "kind": "imports"
+      },
+      {
+        "from": "src/team/__tests__/worker-launch-windows-runtime.test.ts",
+        "to": "external:vitest",
+        "kind": "imports"
+      },
+      {
+        "from": "src/team/__tests__/worker-launch-windows-runtime.test.ts",
+        "to": "src/platform/process-utils.ts",
+        "kind": "imports"
+      },
+      {
+        "from": "src/team/__tests__/worker-launch-windows-runtime.test.ts",
+        "to": "src/team/worker-launch-ack.ts",
+        "kind": "imports"
+      },
+      {
+        "from": "src/team/__tests__/worker-launch-windows-runtime.test.ts",
+        "to": "src/team/worker-launch-ack.ts",
+        "kind": "type-imports"
+      },
+      {
+        "from": "src/team/__tests__/worker-launch-windows-supervisor.test.ts",
+        "to": "external:node:child_process",
+        "kind": "imports"
+      },
+      {
+        "from": "src/team/__tests__/worker-launch-windows-supervisor.test.ts",
+        "to": "external:node:path",
+        "kind": "imports"
+      },
+      {
+        "from": "src/team/__tests__/worker-launch-windows-supervisor.test.ts",
+        "to": "external:vitest",
+        "kind": "imports"
+      },
+      {
+        "from": "src/team/__tests__/worker-launch-windows-supervisor.test.ts",
+        "to": "src/team/worker-launch-ack.ts",
+        "kind": "imports"
       },
       {
         "from": "src/team/__tests__/worker-launch-wrapper-posix.test.ts",
@@ -85367,6 +85517,11 @@
         "from": "src/team/worker-launch-ack.ts",
         "to": "external:node:stream",
         "kind": "type-imports"
+      },
+      {
+        "from": "src/team/worker-launch-ack.ts",
+        "to": "external:node:zlib",
+        "kind": "imports"
       },
       {
         "from": "src/team/worker-launch-ack.ts",
@@ -89495,12 +89650,12 @@
       }
     ],
     "stats": {
-      "nodeCount": 7874,
-      "edgeCount": 8578,
-      "importEdgeCount": 7138,
+      "nodeCount": 7879,
+      "edgeCount": 8604,
+      "importEdgeCount": 7163,
       "registerEdgeCount": 69
     }
   },
-  "inventorySha256": "4e5958861f273260e6b93f87cfb00470182e4fa9c4f7679fb961b1729994fdab",
-  "manifestSha256": "57f57bdc1d763fd1e65398987e971c50ef80fbdbce25e0c510e32b20156d43a6"
+  "inventorySha256": "a572c4888dc7ae00be67841016de441f50f4d5fd0c335cbf04e90b694e63e7a0",
+  "manifestSha256": "1d35351d5c25d0b50d53d0ee8450296256f50ab5419b976c92481e80db4b92a8"
 }
