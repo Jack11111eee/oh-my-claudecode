@@ -739,4 +739,55 @@ describe('sendToWorker cmux trust guards', () => {
       .map(args => args.at(-1));
     expect(submitKeys).toEqual(['enter', 'enter']);
   });
+
+  it('does not reach the final cmux submit fallback if trust appears after six rounds', async () => {
+    const message = 'Read inbox.md, execute now.';
+    const stableCapture = `${message}\n› ready\n`;
+    const trustSelector = [
+      'Folder access', 'D:\\test\\repo',
+      'Trust this folder? Codex can read, edit, and',
+      'run files here, subject to your permission',
+      'settings. Folder settings can run code',
+      'automatically, even without a model request.',
+      '› 1. Trust and continue', '  2. Quit',
+    ].join('\n');
+    const captures = ['› ready\n', stableCapture];
+    for (let round = 0; round < 6; round++) captures.push(stableCapture, stableCapture, stableCapture);
+    captures.push(trustSelector);
+    mockedCalls.cmuxCaptures = captures;
+
+    await expect(sendToWorker('cmux:workspace-1', 'surface-worker-1', message)).resolves.toBe(false);
+
+    const submitKeys = mockedCalls.cmuxArgs
+      .filter(args => args[0] === 'send-key-surface' || args[0] === 'send-key')
+      .map(args => args.at(-1));
+    expect(submitKeys).toEqual(Array.from({ length: 12 }, () => 'enter'));
+  });
+
+  it('does not start an adaptive cmux retry if trust appears before its first control key', async () => {
+    const message = 'Read inbox.md, execute now.';
+    const stableCapture = `${message}\n› ready\n`;
+    const trustSelector = [
+      'Folder access', 'D:\\test\\repo',
+      'Trust this folder? Codex can read, edit, and',
+      'run files here, subject to your permission',
+      'settings. Folder settings can run code',
+      'automatically, even without a model request.',
+      '› 1. Trust and continue', '  2. Quit',
+    ].join('\n');
+    const captures = ['› ready\nesc to interrupt\n', stableCapture];
+    for (let round = 0; round < 6; round++) captures.push(stableCapture, stableCapture, stableCapture);
+    captures.push(stableCapture, trustSelector);
+    mockedCalls.cmuxCaptures = captures;
+
+    await expect(sendToWorker('cmux:workspace-1', 'surface-worker-1', message)).resolves.toBe(false);
+
+    const submitKeys = mockedCalls.cmuxArgs
+      .filter(args => args[0] === 'send-key-surface' || args[0] === 'send-key')
+      .map(args => args.at(-1));
+    expect(submitKeys).toHaveLength(12);
+    expect(submitKeys.filter(key => key === 'enter')).toHaveLength(11);
+    expect(submitKeys.filter(key => key === 'tab')).toHaveLength(1);
+    expect(submitKeys).not.toContain('C-u');
+  });
 });

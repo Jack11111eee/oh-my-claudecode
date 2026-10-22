@@ -3911,7 +3911,11 @@ export async function sendToWorker(
     }
 
     // Adaptive fallback: for busy panes, retry once without interrupting active turns.
-    const finalCapture = await capturePaneAsync(paneId);
+    const finalObservation = await capturePaneObservation(paneId, { operation: 'worker-direct-final-submit' });
+    if (!finalObservation.ok
+      || !finalObservation.captured.trim()
+      || paneHasTrustPrompt(finalObservation.captured)) return false;
+    const finalCapture = finalObservation.captured;
     const paneModeBeforeAdaptiveRetry = await paneInCopyMode(paneId);
     if (shouldAttemptAdaptiveRetry({
       paneBusy,
@@ -3923,25 +3927,32 @@ export async function sendToWorker(
       if (await paneInCopyMode(paneId)) {
         return false;
       }
-      await sendKey('C-u');
+      if (!await sendSubmitKey('C-u')) return false;
       await sleep(80);
       if (await paneInCopyMode(paneId)) {
         return false;
       }
       if (isCmuxSurfaceTarget(paneId)) {
+        const retryInputObservation = await capturePaneObservation(paneId, { operation: 'worker-direct-retry-input' });
+        if (!retryInputObservation.ok
+          || !retryInputObservation.captured.trim()
+          || paneHasTrustPrompt(retryInputObservation.captured)) return false;
         await cmuxSendSurface(paneId, message);
       } else {
         return false;
       }
       await sleep(120);
       for (let round = 0; round < 4; round++) {
-        await sendKey('C-m');
+        if (!await sendSubmitKey('C-m')) return false;
         await sleep(180);
-        await sendKey('C-m');
+        if (!await sendSubmitKey('C-m')) return false;
         await sleep(140);
 
-        const retryCapture = await capturePaneAsync(paneId);
-        if (!paneTailContainsLiteralLine(retryCapture, message)) return true;
+        const retryObservation = await capturePaneObservation(paneId, { operation: 'worker-direct-retry-check' });
+        if (!retryObservation.ok
+          || !retryObservation.captured.trim()
+          || paneHasTrustPrompt(retryObservation.captured)) return false;
+        if (!paneTailContainsLiteralLine(retryObservation.captured, message)) return true;
       }
     }
 
@@ -3952,17 +3963,19 @@ export async function sendToWorker(
 
     // Fail-closed: one final submit attempt, then report failure so
     // callers can surface startup dispatch problems explicitly.
-    await sendKey('C-m');
+    if (!await sendSubmitKey('C-m')) return false;
     await sleep(120);
-    await sendKey('C-m');
+    if (!await sendSubmitKey('C-m')) return false;
     await sleep(140);
-    const finalCheckCapture = await capturePaneAsync(paneId);
+    const finalCheckObservation = await capturePaneObservation(paneId, { operation: 'worker-direct-final-check' });
     // Empty capture means tmux capture failed or returned indeterminate output.
     // Treat this as delivery failure to keep dispatch behavior fail-closed.
-    if (!finalCheckCapture || finalCheckCapture.trim() === '') {
+    if (!finalCheckObservation.ok
+      || !finalCheckObservation.captured.trim()
+      || paneHasTrustPrompt(finalCheckObservation.captured)) {
       return false;
     }
-    return !paneTailContainsLiteralLine(finalCheckCapture, message);
+    return !paneTailContainsLiteralLine(finalCheckObservation.captured, message);
   } catch {
     return false;
   }
