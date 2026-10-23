@@ -4,6 +4,68 @@
   "owner": "Yeachan-Heo",
   "authorizations": [
     {
+      "pullNumber": 4532,
+      "targetRef": "dev",
+      "mergeBaseSha": "1fa8afbbd4a693250e206b14e6418c58866fa1ae",
+      "headSha": "09608a6b6022b39a1df7a9c41adb810c2575790e",
+      "owner": "Yeachan-Heo",
+      "expiresAt": "2027-01-01T00:00:00.000Z",
+      "generatedDelta": {
+        "count": 8,
+        "sha256": "6b81630a7625b0524d83ffcc3aa7f2a9fdf5ee61236398e0bd9b162f520a1d9e"
+      },
+      "generatedFiles": [
+        {
+          "status": "modified",
+          "filename": "bridge/claude-md-coordinator.cjs",
+          "sha": "1a91212cee31df0b0bd65a48ef0d3fa2df69116a",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "bridge/cli.cjs",
+          "sha": "adf3aa6acb08c84618b56ade48c300172508deab",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/cli/__tests__/ralph-afk.test.js",
+          "sha": "6879ed10c0dc48dbd0b6f559aa18b536285e180b",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/cli/__tests__/ralph-afk.test.js.map",
+          "sha": "d400cc6866ae21ce4f9d665d1b262b228ad5e71e",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/cli/commands/ralph.d.ts",
+          "sha": "5ed189ed155875025f2e036ec9ffd1511056a636",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/cli/commands/ralph.d.ts.map",
+          "sha": "131f5e82d4ccb94a27c052cf2d15726b9cdb3fe1",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/cli/commands/ralph.js",
+          "sha": "d68c8d8f1387382226e76c75abdb171fe339724b",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/cli/commands/ralph.js.map",
+          "sha": "b742fad5a6b3abf039fe5767cc40fe93a0161d65",
+          "previousFilename": null
+        }
+      ]
+    },
+    {
       "pullNumber": 4524,
       "targetRef": "dev",
       "mergeBaseSha": "49cd2141d07c8bc80ba5a00b52374f04405c58aa",
