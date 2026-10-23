@@ -71168,6 +71168,7 @@ __export(tmux_session_exports, {
   captureTmuxServerIdentity: () => captureTmuxServerIdentity,
   createTeamSession: () => createTeamSession,
   deliverStartupInbox: () => deliverStartupInbox,
+  detectPaneTrustPromptKind: () => detectPaneTrustPromptKind,
   detectTeamMultiplexerContext: () => detectTeamMultiplexerContext,
   getDefaultShell: () => getDefaultShell,
   getOwnedWorkerLiveness: () => getOwnedWorkerLiveness,
@@ -73492,9 +73493,10 @@ async function paneInputBlockReason(paneId, tmuxServerIdentity, serverIdentityDe
     ...serverIdentityDependencies ? { serverIdentityDependencies } : {}
   });
   if (!observation.ok || !observation.captured.trim()) return "mailbox_membership_unresolvable";
-  if (detectPaneTrustPromptKind(observation.captured) === "codex_directory") {
-    return "codex_workspace_untrusted";
-  }
+  const trustPrompt = detectPaneTrustPromptKind(observation.captured);
+  if (trustPrompt === "codex_directory") return "codex_workspace_untrusted";
+  if (trustPrompt === "cursor_workspace_trust") return "cursor_workspace_untrusted";
+  if (trustPrompt) return "trust_prompt_pending";
   return void 0;
 }
 async function killTeamPane(paneId) {
@@ -73569,7 +73571,7 @@ function detectPaneTrustPromptKind(captured, provider) {
   );
   const hasClaudeDirectoryNoChoice = tail.some((l) => /\bNo,\s*exit\b/i.test(l));
   const hasClaudeDirectoryYesChoice = tail.some((l) => /\bYes,\s*(?:proceed|I trust this folder)\b/i.test(l));
-  if (provider === "claude" && hasClaudeDirectoryQuestion && hasClaudeDirectoryNoChoice && hasClaudeDirectoryYesChoice) {
+  if ((provider === void 0 || provider === "claude") && hasClaudeDirectoryQuestion && hasClaudeDirectoryNoChoice && hasClaudeDirectoryYesChoice) {
     return "claude_directory";
   }
   const hasDirectoryQuestion = tail.some((l) => /Do you trust the contents of this directory\?/i.test(l));
@@ -73884,10 +73886,6 @@ async function sendToWorker(_sessionName, paneId, message2, tmuxServerIdentity) 
     }
     const paneBusy = paneHasActiveTask(initialCapture);
     const trustPromptKind = detectPaneTrustPromptKind(initialCapture);
-    if (trustPromptKind === "codex_directory") return false;
-    if (trustPromptKind === "cursor_workspace_trust") {
-      return false;
-    }
     if (trustPromptKind === "directory") {
       await sendKey("C-m");
       await sleep5(120);
@@ -73898,6 +73896,8 @@ async function sendToWorker(_sessionName, paneId, message2, tmuxServerIdentity) 
       await sleep5(120);
       await sendKey("C-m");
       await sleep5(200);
+    } else if (trustPromptKind) {
+      return false;
     }
     if (isCmuxSurfaceTarget(paneId)) {
       await cmuxSendSurface(paneId, message2);

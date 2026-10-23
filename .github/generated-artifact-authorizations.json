@@ -34065,6 +34065,110 @@
           "previousFilename": null
         }
       ]
+    },
+    {
+      "pullNumber": 4534,
+      "targetRef": "main",
+      "mergeBaseSha": "b30ae01f708413fdde7b85576dfb3f0746244a09",
+      "headSha": "e31720a63da829f5dae24ecc796261a42055a6b7",
+      "owner": "Yeachan-Heo",
+      "expiresAt": "2026-11-20T00:00:00.000Z",
+      "generatedDelta": {
+        "count": 15,
+        "sha256": "4720a98042828a6627f7ac1e28432a0ba69086155a8f005da20e834221d11b7d"
+      },
+      "generatedFiles": [
+        {
+          "status": "modified",
+          "filename": "bridge/claude-md-coordinator.cjs",
+          "sha": "2c877efcd0611e4cac7908c0bc3cf3a77d4caaaa",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "bridge/cli.cjs",
+          "sha": "52a1b6e9b715d39995e51b573f31f9cae6dd440e",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "bridge/runtime-cli.cjs",
+          "sha": "093ea98f5e73ff44109927295b1c7d908bf56ce2",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "bridge/team-mcp.cjs",
+          "sha": "48645dd1616240bf2c16382f41eff9cbfa7ebb58",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "bridge/team.js",
+          "sha": "1cf84add51d307980251fcc51c408f4dfb6fabd9",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/team/__tests__/tmux-session.spawn.test.js",
+          "sha": "6608423c9ba0cde5f4f172ac6a1477e58727acd1",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/team/__tests__/tmux-session.spawn.test.js.map",
+          "sha": "e167687d65649d98a0748b6a9d95a17ab4e570d7",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/team/__tests__/tmux-session.startup.test.js",
+          "sha": "6f1497881ff17e5606c0e1d5452e8aad8f4a33e3",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/team/__tests__/tmux-session.startup.test.js.map",
+          "sha": "99536c85f43d0e1dd9ba1f3dc687307ef59ec6a7",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/team/__tests__/tmux-session.target-membership.test.js",
+          "sha": "72fed5f6615d0bf791f1a14e3e37c3894d8ed99a",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/team/__tests__/tmux-session.target-membership.test.js.map",
+          "sha": "abaf55bc3385448373c20c2149a3d4c6b3b6aae8",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/team/tmux-session.d.ts",
+          "sha": "48df76e524199d9207c11c30c06e6a1135250a10",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/team/tmux-session.d.ts.map",
+          "sha": "2bc90104776d9adfeb6135510c010108ae54fb07",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/team/tmux-session.js",
+          "sha": "5a75d3155e749d4bf47c7f8d6cef08165b85aad0",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/team/tmux-session.js.map",
+          "sha": "b8bca0c75b22c6c07ade791f4cd4743fbaea3135",
+          "previousFilename": null
+        }
+      ]
     }
   ]
 }

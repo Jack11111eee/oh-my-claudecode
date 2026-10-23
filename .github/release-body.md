@@ -1,17 +1,17 @@
-# oh-my-claudecode v5.7.10: Fail-closed Ralph PRD verification
+# oh-my-claudecode v5.7.11: Safer guarded input around trust prompts
 
 ## Release Notes
 
-This release makes `omc ralph verify` fail closed when an existing PRD is invalid or unreadable, instead of incorrectly reporting that no feedback commands exist. Thanks to Get-bot for reporting #4526.
+This release prevents guarded pane input from typing into any trust prompt or selecting a trust decision. Thanks to @iyoda for the contribution to #4528.
 
 ### Bug Fixes
 
-- **fix(ralph): fail closed for invalid PRDs** (#4527, fixes #4526; reported by Get-bot)
+- **fix(team): refuse guarded pane input on every trust prompt kind** (#4528, @iyoda)
 
 ### Other Changes
 
-- **chore(sync): merge the v5.7.9 main release into dev** (#4524)
-- **ci: authorize generated artifacts for sync PR #4524** (#4525)
+- **chore(sync): merge main v5.7.10 release into dev** (#4532)
+- **ci: authorize generated artifacts for sync PR #4532** (#4533)
 
 ### Install / Update
 
@@ -20,7 +20,7 @@ The npm CLI and the Claude Code marketplace/plugin are separate install tracks, 
 **CLI / runtime:**
 
 ```bash
-npm install -g oh-my-claude-sisyphus@5.7.10
+npm install -g oh-my-claude-sisyphus@5.7.11
 ```
 
 **Claude Code plugin:**
@@ -29,10 +29,10 @@ npm install -g oh-my-claude-sisyphus@5.7.10
 /plugin marketplace update omc
 ```
 
-**Full Changelog**: https://github.com/Yeachan-Heo/oh-my-claudecode/compare/v5.7.9...v5.7.10
+**Full Changelog**: https://github.com/Yeachan-Heo/oh-my-claudecode/compare/v5.7.10...v5.7.11
 
 ## Contributors
 
 Thank you to all contributors who made this release possible!
 
-@Yeachan-Heo
+@iyoda @Yeachan-Heo

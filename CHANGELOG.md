@@ -1,3 +1,20 @@
+# oh-my-claudecode v5.7.11: Safer guarded input around trust prompts
+
+## Release Notes
+
+This release prevents guarded pane input from typing into any trust prompt or selecting a trust decision. Thanks to @iyoda for the contribution to #4528.
+
+### Bug Fixes
+
+- **fix(team): refuse guarded pane input on every trust prompt kind** (#4528, @iyoda)
+
+### Other Changes
+
+- **chore(sync): merge main v5.7.10 release into dev** (#4532)
+- **ci: authorize generated artifacts for sync PR #4532** (#4533)
+
+---
+
 # oh-my-claudecode v5.7.10: Fail-closed Ralph PRD verification
 
 ## Release Notes
