@@ -277,6 +277,33 @@ describe('keyword-detector.mjs mode-message dispatch', () => {
     expect(context).not.toContain('name: ralplan');
   });
 
+  it.each([
+    ['ralph: fix the cron.\nRead the workflow docs first.', 'RALPH'],
+    ['/oh-my-claudecode:ralph fix the cron.\nRead the workflow docs first.', 'RALPH'],
+    ['autopilot: lot 2.\nRead the docs first.', 'AUTOPILOT'],
+    ['ralplan: plan the lot.\nRead the docs first.', 'RALPLAN'],
+    ['ralph: fix M-4.\nSteps: red → green.', 'RALPH'],
+  ] as const)('routes leading explicit invocation %s in both shipped hooks', (prompt, keyword) => {
+    for (const detectorPath of [SCRIPT_PATH, TEMPLATE_PATH]) {
+      const output = runKeywordDetector(prompt, process.cwd(), `session-4550-${keyword}`, {}, detectorPath);
+      const context = output.hookSpecificOutput?.additionalContext ?? '';
+
+      expect(context).toContain(`[MAGIC KEYWORD: ${keyword}]`);
+    }
+  });
+
+  it('continues suppressing reference prose that mentions modes mid-sentence in both shipped hooks', () => {
+    const prompt = 'The article compares ralph and autopilot workflows, and explains how they differ.';
+
+    for (const detectorPath of [SCRIPT_PATH, TEMPLATE_PATH]) {
+      const output = runKeywordDetector(prompt, process.cwd(), 'session-4550-reference', {}, detectorPath);
+      const context = output.hookSpecificOutput?.additionalContext ?? '';
+
+      expect(context).not.toContain('[MAGIC KEYWORD: RALPH]');
+      expect(context).not.toContain('[MAGIC KEYWORD: AUTOPILOT]');
+    }
+  });
+
   it('does not emit or activate ralplan for informational/question mentions', () => {
     const cwd = mkdtempSync(join(tmpdir(), 'keyword-detector-ralplan-info-'));
     const sessionId = 'session-2619-info';
