@@ -670,28 +670,31 @@ function isAutopilotCreationAlias(keywordText) {
 }
 
 function hasResultsReportingRequestAfterAction(text) {
-  const reportingRequestIndex = text.search(RESULTS_REPORTING_REQUEST_PATTERN);
-  return reportingRequestIndex > 0 && TASK_ACTION_VERB_PATTERN.test(text.slice(0, reportingRequestIndex));
+  const taskText = stripQuotedSpans(text);
+  const reportingRequestIndex = taskText.search(RESULTS_REPORTING_REQUEST_PATTERN);
+  return reportingRequestIndex > 0 && TASK_ACTION_VERB_PATTERN.test(taskText.slice(0, reportingRequestIndex));
 }
 
 function hasActionableRequestLine(text) {
-  if (!TASK_ACTION_VERB_PATTERN.test(text)) return false;
-  const hasHelpRequest = ENGLISH_HELP_REQUEST_PATTERN.test(text) || MULTILINGUAL_HELP_REQUEST_PATTERN.test(text);
-  return !hasHelpRequest || hasResultsReportingRequestAfterAction(text);
+  const taskText = stripQuotedSpans(text);
+  if (!TASK_ACTION_VERB_PATTERN.test(taskText)) return false;
+  const hasHelpRequest = ENGLISH_HELP_REQUEST_PATTERN.test(taskText) || MULTILINGUAL_HELP_REQUEST_PATTERN.test(taskText);
+  return !hasHelpRequest || hasResultsReportingRequestAfterAction(taskText);
 }
 
 function hasActionableCommandAfterSeparator(text, position, keywordLength) {
   const suffix = text.slice(position + keywordLength).match(/^\s*[:：]\s*([^\n]{0,80})/u)?.[1] ?? '';
-  if (/\?|？/u.test(suffix)) {
+  const taskText = stripQuotedSpans(suffix);
+  if (/\?|？/u.test(taskText)) {
     return false;
   }
   if (
-    (ENGLISH_HELP_REQUEST_PATTERN.test(suffix) || MULTILINGUAL_HELP_REQUEST_PATTERN.test(suffix)) &&
-    !hasResultsReportingRequestAfterAction(suffix)
+    (ENGLISH_HELP_REQUEST_PATTERN.test(taskText) || MULTILINGUAL_HELP_REQUEST_PATTERN.test(taskText)) &&
+    !hasResultsReportingRequestAfterAction(taskText)
   ) {
     return false;
   }
-  return TASK_ACTION_VERB_PATTERN.test(suffix);
+  return TASK_ACTION_VERB_PATTERN.test(taskText);
 }
 
 function isRalphUltraworkMetaOrBanterContext(context, keywordText) {

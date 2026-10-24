@@ -551,13 +551,16 @@ Final draft.`);
         expect(detectKeywordsWithType('autopilot: とは')).toEqual([]);
       });
 
-      it('should keep a leading invocation actionable when its task text contains a help word', () => {
+      it('should keep a leading invocation actionable despite help-looking task text', () => {
         expect(detectKeywordsWithType('ralph: fix 説明文の誤字').find((r) => r.type === 'ralph')).toBeDefined();
         expect(detectKeywordsWithType('autopilot: build 사용법 페이지').find((r) => r.type === 'autopilot')).toBeDefined();
         expect(detectKeywordsWithType('ralph: fix 使い方ページの誤字').find((r) => r.type === 'ralph')).toBeDefined();
         expect(detectKeywordsWithType('ralph: fix the login bug; あとはテストを実行して').find((r) => r.type === 'ralph')).toBeDefined();
         expect(detectKeywordsWithType('ralph: fix the login bug; 결과 알려줘').find((r) => r.type === 'ralph')).toBeDefined();
         expect(detectKeywordsWithType('ralph: fix the login bug; 変更内容を説明して').find((r) => r.type === 'ralph')).toBeDefined();
+        expect(detectKeywordsWithType('autopilot: build a button labelled "教えて"').find((r) => r.type === 'autopilot')).toBeDefined();
+        expect(detectKeywordsWithType('ralph: fix the "알려줘" button').find((r) => r.type === 'ralph')).toBeDefined();
+        expect(detectKeywordsWithType('autopilot: build a button labelled "how to use"').find((r) => r.type === 'autopilot')).toBeDefined();
         expect(detectKeywordsWithType('ralph fix 説明文の誤字').find((r) => r.type === 'ralph')).toBeDefined();
         expect(detectKeywordsWithType('autopilot build a 说明 component').find((r) => r.type === 'autopilot')).toBeDefined();
         expect(detectKeywordsWithType('ralph: update the explanation in README').find((r) => r.type === 'ralph')).toBeDefined();

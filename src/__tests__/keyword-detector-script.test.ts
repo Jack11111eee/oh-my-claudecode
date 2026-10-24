@@ -1471,7 +1471,10 @@ describe('keyword-detector.mjs #4551 regression tests', () => {
     ['ralph:\n使い方ページの誤字を修正して', 'RALPH'],
     ['ralph: fix the login bug; 결과 알려줘', 'RALPH'],
     ['ralph: fix the login bug; 変更内容を説明して', 'RALPH'],
-  ])('should keep a leading command actionable when its task contains a help noun: %s', (prompt, mode) => {
+    ['autopilot: build a button labelled "教えて"', 'AUTOPILOT'],
+    ['ralph: fix the "알려줘" button', 'RALPH'],
+    ['autopilot: build a button labelled "how to use"', 'AUTOPILOT'],
+  ])('should keep a leading command actionable despite help-looking task text: %s', (prompt, mode) => {
     for (const detectorPath of [SCRIPT_PATH, TEMPLATE_PATH]) {
       const output = runKeywordDetector(prompt, process.cwd(), `test-4564-help-noun-${mode}`, {}, detectorPath);
       expect(output.hookSpecificOutput?.additionalContext).toContain(`[MAGIC KEYWORD: ${mode}]`);
