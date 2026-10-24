@@ -219,6 +219,7 @@ export interface WaitForShellReadyOptions {
     pollIntervalMs?: number;
     tmuxServerIdentity?: TmuxServerIdentity;
 }
+export declare function resolveTeamShellReadyTimeoutMs(env?: NodeJS.ProcessEnv, explicitTimeoutMs?: number): number;
 export interface WorkerPaneShell {
     /** Shell command argv appended to new-session/new-window/split-window. */
     args: string[];
