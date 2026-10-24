@@ -6,14 +6,14 @@
     "base": "05c800f40d1ad53b42a78609d2667ef4f726808b",
     "planningHead": "0a91273e61dbbd47eb0af4c02844409251e08398",
     "head": "5276dcd966c26e45b5cfef4a89915bf2bfa97802",
-    "sourceSha256": "4ed48129f3eb17dbc89da11c269f240f906e4f7a7a9efd98a8af5450592be8f1",
+    "sourceSha256": "c44a0e739deafcb1c1ba88ca981bd9b94d83d24beccce34e556de29cafbfddae",
     "generatedAt": null,
     "generator": "scripts/generate-inventory-graph.mjs"
   },
   "base": "05c800f40d1ad53b42a78609d2667ef4f726808b",
   "planningHead": "0a91273e61dbbd47eb0af4c02844409251e08398",
   "head": "5276dcd966c26e45b5cfef4a89915bf2bfa97802",
-  "sourceSha256": "4ed48129f3eb17dbc89da11c269f240f906e4f7a7a9efd98a8af5450592be8f1",
+  "sourceSha256": "c44a0e739deafcb1c1ba88ca981bd9b94d83d24beccce34e556de29cafbfddae",
   "counts": {
     "public": {
       "skills": 48,
@@ -32,9 +32,9 @@
       "total": 1509
     },
     "generated": {
-      "distFiles": 5739,
+      "distFiles": 5741,
       "bridgeFiles": 9,
-      "total": 5748
+      "total": 5750
     },
     "prompt": {
       "promptLikeFiles": 62
@@ -6624,6 +6624,8 @@
       "dist/utils/string-width.d.ts.map",
       "dist/utils/string-width.js",
       "dist/utils/string-width.js.map",
+      "dist/utils/url.d.ts",
+      "dist/utils/url.js",
       "dist/utils/user-skill-compat.d.ts",
       "dist/utils/user-skill-compat.d.ts.map",
       "dist/utils/user-skill-compat.js",
@@ -36700,6 +36702,16 @@
         "id": "dist/utils/string-width.js.map",
         "kind": "generated-dist",
         "path": "dist/utils/string-width.js.map"
+      },
+      {
+        "id": "dist/utils/url.d.ts",
+        "kind": "generated-dist",
+        "path": "dist/utils/url.d.ts"
+      },
+      {
+        "id": "dist/utils/url.js",
+        "kind": "generated-dist",
+        "path": "dist/utils/url.js"
       },
       {
         "id": "dist/utils/user-skill-compat.d.ts",
@@ -89875,12 +89887,12 @@
       }
     ],
     "stats": {
-      "nodeCount": 7892,
+      "nodeCount": 7894,
       "edgeCount": 8634,
       "importEdgeCount": 7191,
       "registerEdgeCount": 69
     }
   },
   "inventorySha256": "5ed1779df9780ddd15b7160a6e998a10a8a14eb675a80c2382a0260110bd59a4",
-  "manifestSha256": "f1046683f6c6be86c37a5d4aa0e1b3c97310f70d6c82f9c1c907960573867019"
+  "manifestSha256": "410ce5bdc64361b3688705a0b10886f172c99f1e9817fbdb27a950a8ff02616b"
 }
