@@ -1443,6 +1443,7 @@ describe('keyword-detector.mjs #4551 regression tests', () => {
     'autopilot:\n如何使用',
     'autopilot: 如何使用 build 命令',
     'autopilot: build 사용법 알려줘',
+    'autopilot: とは',
   ])('should keep a leading help request informational: %s', (prompt) => {
     for (const detectorPath of [SCRIPT_PATH, TEMPLATE_PATH]) {
       const output = runKeywordDetector(prompt, process.cwd(), 'test-4553-followup-help', {}, detectorPath);
@@ -1464,6 +1465,7 @@ describe('keyword-detector.mjs #4551 regression tests', () => {
   it.each([
     ['autopilot: build 사용법 페이지', 'AUTOPILOT'],
     ['ralph: fix 使い方ページの誤字', 'RALPH'],
+    ['ralph: fix the login bug; あとはテストを実行して', 'RALPH'],
   ])('should keep a leading command actionable when its task contains a help noun: %s', (prompt, mode) => {
     for (const detectorPath of [SCRIPT_PATH, TEMPLATE_PATH]) {
       const output = runKeywordDetector(prompt, process.cwd(), `test-4564-help-noun-${mode}`, {}, detectorPath);
