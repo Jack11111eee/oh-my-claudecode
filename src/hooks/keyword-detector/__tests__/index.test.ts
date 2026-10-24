@@ -557,6 +557,8 @@ Final draft.`);
         expect(detectKeywordsWithType('ralph: how to use run and describe the results')).toEqual([]);
         expect(detectKeywordsWithType('autopilot: 解释如何修复登录问题')).toEqual([]);
         expect(detectKeywordsWithType('autopilot: 说明一下如何使用 build')).toEqual([]);
+        expect(detectKeywordsWithType('autopilot: 請解釋修復登入問題的步驟')).toEqual([]);
+        expect(detectKeywordsWithType('autopilot: 请解释修复登录问题的步骤')).toEqual([]);
       });
 
       it('should keep a leading invocation actionable despite help-looking task text', () => {
