@@ -410,9 +410,9 @@ const INFORMATIONAL_INTENT_PATTERNS = [
 const STRONG_HELP_QUERY_PATTERN =
   /\?|？|\b(?:how\s+(?:to|do\s+i)\s+use|what(?:'s|\s+is)|explain|describe|tell\s+me\s+about)\b|(?:사용법|使い方|什么是|怎么用|如何使用)/iu;
 // Help-request constructions ("tell me", "how to use", "what is") rather than
-// bare nouns, so a command that mentions a help word stays actionable.
+// standalone topic nouns like 사용법/使い方, so task objects stay actionable.
 const MULTILINGUAL_HELP_REQUEST_PATTERN =
-  /(?:알려\s?줘|알려줄래|설명해\s?줘|사용법|뭐야|뭔데|어떻게\s*(?:써|쓰|사용)|教えて|説明して|使い方|とは|って何|如何使用|怎(?:么|樣)用|是什么|什么是|คืออะไร|ใช้(?:งาน)?ยังไง|ใช้(?:งาน)?อย่างไร)/u;
+  /(?:알려\s?줘|알려줄래|설명해\s?줘|뭐야|뭔데|어떻게\s*(?:써|쓰|사용)|教えて|説明して|とは|って何|如何使用|怎(?:么|樣)用|是什么|什么是|คืออะไร|ใช้(?:งาน)?ยังไง|ใช้(?:งาน)?อย่างไร)/u;
 const INFORMATIONAL_CONTEXT_WINDOW = 80;
 const QUOTED_SPAN_PATTERN =
   /"[^"\n]{1,400}"|'[^'\n]{1,400}'|“[^”\n]{1,400}”|‘[^’\n]{1,400}’/g;

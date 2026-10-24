@@ -1444,9 +1444,11 @@ describe('keyword-detector.mjs #4551 regression tests', () => {
     'autopilot: 如何使用 build 命令',
     'autopilot: build 사용법 알려줘',
   ])('should keep a leading help request informational: %s', (prompt) => {
-    const output = runKeywordDetector(prompt, process.cwd(), 'test-4553-followup-help');
-    expect(output.continue).toBe(true);
-    expect(output.hookSpecificOutput).toBeUndefined();
+    for (const detectorPath of [SCRIPT_PATH, TEMPLATE_PATH]) {
+      const output = runKeywordDetector(prompt, process.cwd(), 'test-4553-followup-help', {}, detectorPath);
+      expect(output.continue).toBe(true);
+      expect(output.hookSpecificOutput).toBeUndefined();
+    }
   });
 
   it('should activate a bare prefix line followed by a command', () => {
@@ -1457,6 +1459,16 @@ describe('keyword-detector.mjs #4551 regression tests', () => {
   it('should keep a leading invocation actionable when its task text contains a help word', () => {
     const output = runKeywordDetector('ralph: fix 説明文の誤字', process.cwd(), 'test-4553-fix');
     expect(output.hookSpecificOutput?.additionalContext).toContain('[MAGIC KEYWORD: RALPH]');
+  });
+
+  it.each([
+    ['autopilot: build 사용법 페이지', 'AUTOPILOT'],
+    ['ralph: fix 使い方ページの誤字', 'RALPH'],
+  ])('should keep a leading command actionable when its task contains a help noun: %s', (prompt, mode) => {
+    for (const detectorPath of [SCRIPT_PATH, TEMPLATE_PATH]) {
+      const output = runKeywordDetector(prompt, process.cwd(), `test-4564-help-noun-${mode}`, {}, detectorPath);
+      expect(output.hookSpecificOutput?.additionalContext).toContain(`[MAGIC KEYWORD: ${mode}]`);
+    }
   });
 
   it.each([
