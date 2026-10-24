@@ -329,6 +329,24 @@ Final draft.`);
         expect(detectKeywordsWithType('랄프 켜').find((r) => r.type === 'ralph')).toBeDefined();
       });
 
+      it.each([
+        ['ralph: fix the cron.\nRead the workflow docs first.', 'ralph'],
+        ['/oh-my-claudecode:ralph fix the cron.\nRead the workflow docs first.', 'ralph'],
+        ['autopilot: lot 2.\nRead the docs first.', 'autopilot'],
+        ['ralplan: plan the lot.\nRead the docs first.', 'ralplan'],
+        ['ralph: fix M-4.\nSteps: red → green.', 'ralph'],
+      ] as const)('should honor a leading direct invocation in %s', (prompt, type) => {
+        expect(detectKeywordsWithType(prompt).find((result) => result.type === type)).toBeDefined();
+      });
+
+      it('should suppress reference prose that mentions modes mid-sentence', () => {
+        expect(
+          detectKeywordsWithType(
+            'The article compares ralph and autopilot workflows, and explains how they differ.',
+          ),
+        ).toEqual([]);
+      });
+
       it('should NOT detect informational English questions about ralph', () => {
         const result = detectKeywordsWithType('What is ralph and how do I use it?');
         expect(result).toEqual([]);
