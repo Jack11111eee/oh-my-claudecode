@@ -1414,3 +1414,60 @@ describe('keyword-detector.mjs global disable values', () => {
     expect(output.hookSpecificOutput?.additionalContext).toContain('<search-mode>');
   });
 });
+
+// Regression tests for #4551 regressions
+describe('keyword-detector.mjs #4551 regression tests', () => {
+  it('should detect colon-invocation with execution verb even if followed by help-like text', () => {
+    // Issue 1: 'ralph: fix the bug.\nExplain the change.' must activate (not suppress as informational)
+    const result1 = runKeywordDetector('ralph: fix the bug.\nExplain the change.', process.cwd(), 'test-4551-1');
+    expect(result1.hookSpecificOutput?.additionalContext).toContain('[MAGIC KEYWORD: RALPH]');
+    expect(result1.hookSpecificOutput?.additionalContext).toContain('IMPORTANT: Start the ralph workflow immediately');
+
+    // Issue 1: 'autopilot: build an API.\nDescribe the endpoints.' must activate
+    const result2 = runKeywordDetector('autopilot: build an API.\nDescribe the endpoints.', process.cwd(), 'test-4551-2');
+    expect(result2.hookSpecificOutput?.additionalContext).toContain('[MAGIC KEYWORD: AUTOPILOT]');
+    expect(result2.hookSpecificOutput?.additionalContext).toContain('IMPORTANT: Start the autopilot workflow immediately');
+  });
+
+  it.each(['ralph: 설명해줘', 'autopilot: 알려줘', 'autopilot: 解释一下'])(
+    'should suppress a leading invocation whose own line is a help request: %s',
+    (prompt) => {
+      const output = runKeywordDetector(prompt, process.cwd(), 'test-4553-help');
+      expect(output.continue).toBe(true);
+      expect(output.hookSpecificOutput).toBeUndefined();
+    },
+  );
+
+  it('should keep a leading invocation actionable when its task text contains a help word', () => {
+    const output = runKeywordDetector('ralph: fix 説明文の誤字', process.cwd(), 'test-4553-fix');
+    expect(output.hookSpecificOutput?.additionalContext).toContain('[MAGIC KEYWORD: RALPH]');
+  });
+
+  it.each([
+    ['ralph fix 説明文の誤字', 'RALPH'],
+    ['autopilot build a 说明 component', 'AUTOPILOT'],
+    ['ralph: update the explanation in README', 'RALPH'],
+    ['ralph: remove the explanation section', 'RALPH'],
+  ])('should keep a leading command actionable: %s', (prompt, mode) => {
+    const output = runKeywordDetector(prompt, process.cwd(), 'test-4553-colonless');
+    expect(output.hookSpecificOutput?.additionalContext).toContain(`[MAGIC KEYWORD: ${mode}]`);
+  });
+
+  it('should suppress colon-invocation with multilingual help queries', () => {
+    // Issue 2: Multilingual help queries with colon prefix should NOT activate
+    // Korean: "기능 알려줘" (tell me about the feature)
+    const result1 = runKeywordDetector('autopilot: 기능 알려줘', process.cwd(), 'test-4551-kr');
+    expect(result1.continue).toBe(true);
+    expect(result1.hookSpecificOutput).toBeUndefined();
+
+    // Japanese: "機能を説明して" (explain the feature)
+    const result2 = runKeywordDetector('ralph: 機能を説明して', process.cwd(), 'test-4551-ja');
+    expect(result2.continue).toBe(true);
+    expect(result2.hookSpecificOutput).toBeUndefined();
+
+    // Thai: "คืออะไร ใช้งานยังไง" (what is it, how to use it)
+    const result3 = runKeywordDetector('autopilot: คืออะไร ใช้งานยังไง', process.cwd(), 'test-4551-th');
+    expect(result3.continue).toBe(true);
+    expect(result3.hookSpecificOutput).toBeUndefined();
+  });
+});

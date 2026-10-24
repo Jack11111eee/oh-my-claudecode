@@ -398,6 +398,8 @@ const INFORMATIONAL_INTENT_PATTERNS: RegExp[] = [
   /(?:什么是|怎(?:么|樣)用|如何使用|解释|說明|说明)/u,
   /(?:ทำไม|อะไร|ยังไง|อย่างไร|คืออะไร|หมายถึง|แปลว่า|อธิบาย|มั้ย|ไหม|เหรอ|หรอ|หรือไม่|หรือเปล่า|ใช่ไหม|ถูกมั้ย|เกี่ยวกับ|เหมือน)/u,
 ];
+const STRONG_HELP_QUERY_PATTERN =
+  /\?|？|\b(?:how\s+(?:to|do\s+i)\s+use|what(?:'s|\s+is)|explain|describe|tell\s+me\s+about)\b|(?:사용법|使い方|什么是|怎么用|如何使用)/iu;
 const INFORMATIONAL_CONTEXT_WINDOW = 80;
 const QUOTED_SPAN_PATTERN =
   /"[^"\n]{1,400}"|'[^'\n]{1,400}'|“[^”\n]{1,400}”|‘[^’\n]{1,400}’/g;
@@ -533,9 +535,13 @@ function hasDirectLeadingInvocation(text: string, position: number, keywordLengt
     return true;
   }
 
-  const suffix = text.slice(position + keywordLength);
-  return /^\s*[:：]/.test(suffix) ||
-    /^\s+(?:fix|debug|investigate|resolve|handle|patch|address|implement|build|create|make|run|start|enable|activate|invoke|trigger|launch|plan)\b/i.test(suffix);
+  return /^\s*[:：]/.test(text.slice(position + keywordLength)) || hasLeadingCommandVerb(text, position, keywordLength);
+}
+
+function hasLeadingCommandVerb(text: string, position: number, keywordLength: number): boolean {
+  return /^\s+(?:fix|debug|investigate|resolve|handle|patch|address|implement|build|create|make|run|start|enable|activate|invoke|trigger|launch|plan)\b/i.test(
+    text.slice(position + keywordLength),
+  );
 }
 
 function hasConversationalInvocationNearKeyword(
@@ -641,7 +647,7 @@ function isInformationalKeywordContext(text: string, position: number, keywordLe
   const end = Math.min(text.length, position + keywordLength + INFORMATIONAL_CONTEXT_WINDOW);
   const context = text.slice(start, end);
   const hasInformationalIntent = INFORMATIONAL_INTENT_PATTERNS.some((pattern) => pattern.test(context));
-  const hasStrongHelpQueryIntent = /\?|？|\b(?:how\s+(?:to|do\s+i)\s+use|what(?:'s|\s+is)|explain|describe|tell\s+me\s+about)\b|(?:사용법|使い方|什么是|怎么用|如何使用)/iu.test(context);
+  const hasStrongHelpQueryIntent = STRONG_HELP_QUERY_PATTERN.test(context);
   const lineBounds = getLineBounds(text, position);
   const line = text.slice(lineBounds.start, lineBounds.end);
   const questionOutsideQuotes = stripQuotedSpans(text);
@@ -695,10 +701,19 @@ function isInformationalKeywordContext(text: string, position: number, keywordLe
     }
   }
 
-  // Keep clear help questions informational, but do not let later reference
-  // prose suppress a direct leading invocation.
+  // A direct leading invocation is decided by its own line: a command verb
+  // right after the keyword or an actionable command after the separator
+  // always runs, a help request on that line stays informational, and later
+  // prose never suppresses it.
   if (keywordText && hasDirectLeadingInvocation(text, position, keywordLength)) {
-    return hasInformationalIntent && hasStrongHelpQueryIntent;
+    if (hasActionableCommandSeparatorInvocation || hasLeadingCommandVerb(text, position, keywordLength)) {
+      return false;
+    }
+    // English help needs a help-query construction on the line, so task
+    // objects such as "update the explanation" stay actionable; the other
+    // languages keep their dedicated informational phrasing patterns.
+    return INFORMATIONAL_INTENT_PATTERNS.slice(1).some((pattern) => pattern.test(line)) ||
+      (INFORMATIONAL_INTENT_PATTERNS[0].test(line) && STRONG_HELP_QUERY_PATTERN.test(line));
   }
 
   if (keywordText) {
