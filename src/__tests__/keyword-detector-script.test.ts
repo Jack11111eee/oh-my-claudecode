@@ -1438,9 +1438,59 @@ describe('keyword-detector.mjs #4551 regression tests', () => {
     },
   );
 
+  it.each([
+    'ralph:\nExplain how this mode works',
+    'autopilot:\n如何使用',
+    'autopilot:\nbuild 사용법 알려줘',
+    'autopilot: 如何使用 build 命令',
+    'autopilot: build 사용법 알려줘',
+    'autopilot: とは',
+    'autopilot: what are the build options?',
+    'ralph: what are the results of the last run?',
+    'autopilot: what are the build options',
+    'autopilot: how to use build and explain the results',
+    'ralph: how do I use run and describe the results',
+    'autopilot: 解释如何修复登录问题',
+    'autopilot: 说明一下如何使用 build',
+    'autopilot: 請解釋修復登入問題的步驟',
+    'autopilot: 请解释修复登录问题的步骤',
+  ])('should keep a leading help request informational: %s', (prompt) => {
+    for (const detectorPath of [SCRIPT_PATH, TEMPLATE_PATH]) {
+      const output = runKeywordDetector(prompt, process.cwd(), 'test-4553-followup-help', {}, detectorPath);
+      expect(output.continue).toBe(true);
+      expect(output.hookSpecificOutput).toBeUndefined();
+    }
+  });
+
+  it('should activate a bare prefix line followed by a command', () => {
+    const output = runKeywordDetector('ralph:\nfix the login bug', process.cwd(), 'test-4553-followup-fix');
+    expect(output.hookSpecificOutput?.additionalContext).toContain('[MAGIC KEYWORD: RALPH]');
+  });
+
   it('should keep a leading invocation actionable when its task text contains a help word', () => {
     const output = runKeywordDetector('ralph: fix 説明文の誤字', process.cwd(), 'test-4553-fix');
     expect(output.hookSpecificOutput?.additionalContext).toContain('[MAGIC KEYWORD: RALPH]');
+  });
+
+  it.each([
+    ['autopilot: build 사용법 페이지', 'AUTOPILOT'],
+    ['ralph: fix 使い方ページの誤字', 'RALPH'],
+    ['ralph: fix the login bug; あとはテストを実行して', 'RALPH'],
+    ['autopilot:\n사용법 페이지를 만들어줘', 'AUTOPILOT'],
+    ['ralph:\n使い方ページの誤字を修正して', 'RALPH'],
+    ['ralph: fix the login bug; 결과 알려줘', 'RALPH'],
+    ['ralph: fix the login bug; 変更内容を説明して', 'RALPH'],
+    ['ralph: fix the login bug; 解释一下结果', 'RALPH'],
+    ['autopilot: build a 说明 component', 'AUTOPILOT'],
+    ['ralph: fix 说明文档中的拼写错误', 'RALPH'],
+    ['autopilot: build a button labelled "教えて"', 'AUTOPILOT'],
+    ['ralph: fix the "알려줘" button', 'RALPH'],
+    ['autopilot: build a button labelled "how to use"', 'AUTOPILOT'],
+  ])('should keep a leading command actionable despite help-looking task text: %s', (prompt, mode) => {
+    for (const detectorPath of [SCRIPT_PATH, TEMPLATE_PATH]) {
+      const output = runKeywordDetector(prompt, process.cwd(), `test-4564-help-noun-${mode}`, {}, detectorPath);
+      expect(output.hookSpecificOutput?.additionalContext).toContain(`[MAGIC KEYWORD: ${mode}]`);
+    }
   });
 
   it.each([
