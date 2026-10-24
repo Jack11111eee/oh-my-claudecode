@@ -57573,6 +57573,16 @@ var init_gitea = __esm({
   }
 });
 
+// src/utils/url.ts
+function stripTrailingSlashes(value) {
+  return value.replace(/\/+$/, "");
+}
+var init_url = __esm({
+  "src/utils/url.ts"() {
+    "use strict";
+  }
+});
+
 // src/providers/index.ts
 function detectProvider(remoteUrl) {
   const url = remoteUrl.toLowerCase();
@@ -57603,7 +57613,7 @@ function detectProvider(remoteUrl) {
   return "unknown";
 }
 function parseRemoteUrl(url) {
-  const trimmed = url.trim();
+  const trimmed = stripTrailingSlashes(url.trim());
   const azureHttpsMatch = trimmed.match(
     /^https?:\/\/(?:[^/@?#]+@)?dev\.azure\.com\.?\/([^/]+)\/([^/]+)\/_git\/([^/\s]+)$/i
   );
@@ -57700,6 +57710,7 @@ var init_providers = __esm({
     init_bitbucket();
     init_azure_devops();
     init_gitea();
+    init_url();
     providerRegistry = null;
   }
 });
@@ -58393,7 +58404,7 @@ async function runSessionEndAction(context, _execute) {
     fs13.mkdirSync(runPath, { recursive: true });
     if (Date.now() >= context.deadlineAt) return { code: "deadline-before-arm", completed: false };
     const childInput = { directory: context.directory, sessionId: context.sessionId, jobId: context.job.jobId, actionName: context.actionName, attempt: context.action.attempts, ownerNonce: context.ownerNonce, runnerNonce: context.runnerNonce, runPath, deadlineAt: context.deadlineAt };
-    const child = (0, import_child_process21.spawn)(process.execPath, [(0, import_url12.fileURLToPath)(importMetaUrl), RUNNER_ARG, JSON.stringify(childInput)], { detached: true, stdio: "ignore", windowsHide: true, env: runnerEnvironment(context) });
+    const child = (0, import_child_process21.spawn)(process.execPath, [(0, import_url13.fileURLToPath)(importMetaUrl), RUNNER_ARG, JSON.stringify(childInput)], { detached: true, stdio: "ignore", windowsHide: true, env: runnerEnvironment(context) });
     const identity = child.pid ? getProcessStartIdentitySync(child.pid) : null;
     child.unref();
     let settled = false;
@@ -58503,14 +58514,14 @@ async function runActionRunnerEntrypoint() {
     process.exitCode = 1;
   }
 }
-var fs13, path18, import_child_process21, import_url12, RUNNER_ARG, POST_KILL_SETTLE_MS;
+var fs13, path18, import_child_process21, import_url13, RUNNER_ARG, POST_KILL_SETTLE_MS;
 var init_action_runner = __esm({
   "src/hooks/session-end/action-runner.ts"() {
     "use strict";
     fs13 = __toESM(require("fs"), 1);
     path18 = __toESM(require("path"), 1);
     import_child_process21 = require("child_process");
-    import_url12 = require("url");
+    import_url13 = require("url");
     init_atomic_write();
     init_process_utils();
     init_cleanup_manifest();
@@ -61885,13 +61896,12 @@ function isInsideTmux() {
 }
 function parseTmuxPanes(result) {
   const panes = [];
-  for (const line of result.trim().split("\n")) {
+  for (const line of result.split(/\r?\n/)) {
     if (!line.trim()) continue;
-    const parts = line.split(" ");
-    if (parts.length < 4) continue;
-    const [location, paneId, activeStr, windowName, ...titleParts] = parts;
-    const [sessionWindow, paneIndexStr] = location.split(".");
-    const [session, windowIndexStr] = sessionWindow.split(":");
+    const match = line.match(/^([^:]*):(\d+)\.(\d+) (%\d+) ([01]) (.*)$/);
+    if (!match) continue;
+    const [, session, windowIndexStr, paneIndexStr, paneId, activeStr, rest] = match;
+    const [windowName, ...titleParts] = rest.split(" ");
     panes.push({
       id: paneId,
       session,
@@ -68222,7 +68232,7 @@ function getPackageDir5() {
     }
   }
   try {
-    const __filename4 = (0, import_url13.fileURLToPath)(importMetaUrl);
+    const __filename4 = (0, import_url14.fileURLToPath)(importMetaUrl);
     const __dirname2 = (0, import_path97.dirname)(__filename4);
     return (0, import_path97.join)(__dirname2, "..", "..", "..");
   } catch {
@@ -68432,13 +68442,13 @@ function listBuiltinSkillNames(options) {
 function getSkillsDir() {
   return SKILLS_DIR2;
 }
-var import_fs78, import_path97, import_url13, SKILLS_DIR2, CC_NATIVE_COMMANDS2, SKININTHEGAMEBROS_ONLY_SKILLS2, DEFAULT_DEEP_INTERVIEW_AMBIGUITY_THRESHOLD, cachedSkills, cachedSkillsKey;
+var import_fs78, import_path97, import_url14, SKILLS_DIR2, CC_NATIVE_COMMANDS2, SKININTHEGAMEBROS_ONLY_SKILLS2, DEFAULT_DEEP_INTERVIEW_AMBIGUITY_THRESHOLD, cachedSkills, cachedSkillsKey;
 var init_skills = __esm({
   "src/features/builtin-skills/skills.ts"() {
     "use strict";
     import_fs78 = require("fs");
     import_path97 = require("path");
-    import_url13 = require("url");
+    import_url14 = require("url");
     init_frontmatter();
     init_omc_cli_rendering();
     init_skill_pipeline();
@@ -69274,9 +69284,31 @@ async function writeExclusiveTextAtomic(path30, value) {
     await (0, import_promises16.unlink)(candidate).catch(() => void 0);
   }
 }
+function parseExactInteger2(raw) {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const negative = trimmed.startsWith("-");
+  const magnitude = negative || trimmed.startsWith("+") ? trimmed.slice(1) : trimmed;
+  const match = DECIMAL_INTEGER_TEXT2.exec(magnitude);
+  if (!match) return null;
+  const integerDigits = match[1] ?? "";
+  const fractionDigits = match[2] ?? match[3] ?? "";
+  const exponent = match[4] === void 0 ? 0 : Number(match[4]);
+  const shift = fractionDigits.length - exponent;
+  if (shift > 0) {
+    const significand = integerDigits + fractionDigits;
+    if (/[1-9]/.test(significand)) {
+      const trailingZeros = significand.length - significand.replace(/0+$/, "").length;
+      if (trailingZeros < shift) return null;
+    }
+  }
+  const parsed = (negative ? -1 : 1) * Number(magnitude);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+}
 function resolvePositiveInteger(value, fallback) {
-  const parsed = Number.parseInt(value ?? "", 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  if (value == null || value.trim() === "") return fallback;
+  const parsed = parseExactInteger2(value);
+  return parsed !== null && parsed > 0 ? parsed : fallback;
 }
 async function prepareWorkerLaunchAttempt(input) {
   const instanceId = input.instanceId;
@@ -70111,7 +70143,7 @@ function quoteWindowsCmdArgument(value) {
   if (/[\r\n]/.test(value)) throw new Error("worker_launch_provider_argv_invalid");
   return `"${value.replace(/%/g, "%%").replace(/"/g, '""')}"`;
 }
-var import_node_crypto8, import_node_fs11, import_promises16, import_node_path16, import_node_os2, WORKER_LAUNCH_SCHEMA_VERSION, DEFAULT_ACK_TIMEOUT_MS, DEFAULT_POLL_INTERVAL_MS, DEFAULT_DECISION_TIMEOUT_MS, WORKER_LAUNCH_TRANSPORT_OWNER_KIND, WORKER_LAUNCH_TRANSPORT_CLEANUP_KIND, WORKER_LAUNCH_BOOTSTRAP_DESCRIPTOR_FILE, WORKER_LAUNCH_RECOVERY_GATE_CONTAINED_ENV, WORKER_LAUNCH_INTERNAL_ENV_KEYS, WORKER_LAUNCH_AUTHORITY_PROTOCOL, WINDOWS_SUPERVISOR_PROTOCOL, WINDOWS_RESERVED_ENV_KEYS, SAFE_BASELINE_ENV_KEYS;
+var import_node_crypto8, import_node_fs11, import_promises16, import_node_path16, import_node_os2, WORKER_LAUNCH_SCHEMA_VERSION, DEFAULT_ACK_TIMEOUT_MS, DEFAULT_POLL_INTERVAL_MS, DEFAULT_DECISION_TIMEOUT_MS, WORKER_LAUNCH_TRANSPORT_OWNER_KIND, WORKER_LAUNCH_TRANSPORT_CLEANUP_KIND, WORKER_LAUNCH_BOOTSTRAP_DESCRIPTOR_FILE, WORKER_LAUNCH_RECOVERY_GATE_CONTAINED_ENV, WORKER_LAUNCH_INTERNAL_ENV_KEYS, WORKER_LAUNCH_AUTHORITY_PROTOCOL, WINDOWS_SUPERVISOR_PROTOCOL, WINDOWS_RESERVED_ENV_KEYS, SAFE_BASELINE_ENV_KEYS, DECIMAL_INTEGER_TEXT2;
 var init_worker_launch_ack = __esm({
   "src/team/worker-launch-ack.ts"() {
     "use strict";
@@ -70144,6 +70176,7 @@ var init_worker_launch_ack = __esm({
     WINDOWS_SUPERVISOR_PROTOCOL = "worker-launch-windows-supervisor-v1";
     WINDOWS_RESERVED_ENV_KEYS = new Set([...WORKER_LAUNCH_INTERNAL_ENV_KEYS, "SystemRoot"].map((key) => key.toUpperCase()));
     SAFE_BASELINE_ENV_KEYS = ["PATH", "TEMP", "TMP", "TERM", "COLORTERM"];
+    DECIMAL_INTEGER_TEXT2 = /^(?:(\d+)(?:\.(\d*))?|\.(\d+))(?:[eE]([+-]?\d+))?$/;
   }
 });
 
@@ -71197,6 +71230,7 @@ __export(tmux_session_exports, {
   resolveShellFromCandidates: () => resolveShellFromCandidates,
   resolveSplitPaneWorkerPaneIds: () => resolveSplitPaneWorkerPaneIds,
   resolveSupportedShellAffinity: () => resolveSupportedShellAffinity,
+  resolveTeamShellReadyTimeoutMs: () => resolveTeamShellReadyTimeoutMs,
   retryStartupInboxSubmit: () => retryStartupInboxSubmit,
   runTmuxServerIdentityGuard: () => runTmuxServerIdentityGuard,
   sanitizeName: () => sanitizeName,
@@ -72123,12 +72157,40 @@ async function getPaneCurrentCommandStatus(paneId, tmuxServerIdentity) {
 function paneCurrentCommandLooksSubmitted(command) {
   return command.length > 0 && !paneCurrentCommandLooksReady(command);
 }
+function parseExactInteger3(raw) {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const negative = trimmed.startsWith("-");
+  const magnitude = negative || trimmed.startsWith("+") ? trimmed.slice(1) : trimmed;
+  const match = DECIMAL_INTEGER_TEXT3.exec(magnitude);
+  if (!match) return null;
+  const integerDigits = match[1] ?? "";
+  const fractionDigits = match[2] ?? match[3] ?? "";
+  const exponent = match[4] === void 0 ? 0 : Number(match[4]);
+  const shift = fractionDigits.length - exponent;
+  if (shift > 0) {
+    const significand = integerDigits + fractionDigits;
+    if (/[1-9]/.test(significand)) {
+      const trailingZeros = significand.length - significand.replace(/0+$/, "").length;
+      if (trailingZeros < shift) return null;
+    }
+  }
+  const parsed = (negative ? -1 : 1) * Number(magnitude);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+}
+function resolveTeamShellReadyTimeoutMs(env2 = process.env, explicitTimeoutMs) {
+  if (Number.isFinite(explicitTimeoutMs) && (explicitTimeoutMs ?? 0) > 0) {
+    return Number(explicitTimeoutMs);
+  }
+  const raw = env2.OMC_TEAM_SHELL_READY_TIMEOUT_MS;
+  const parsed = raw == null || String(raw).trim() === "" ? null : parseExactInteger3(String(raw));
+  return parsed !== null && parsed > 0 ? parsed : 5e3;
+}
 async function waitForShellReady(paneId, opts = {}) {
   if (isCmuxSurfaceTarget(paneId)) return true;
   if (!opts.tmuxServerIdentity) return false;
   if (!isValidTmuxServerIdentity(opts.tmuxServerIdentity) || await observeTmuxServerIdentity(opts.tmuxServerIdentity) !== "matching") return false;
-  const envTimeout = Number.parseInt(process.env.OMC_TEAM_SHELL_READY_TIMEOUT_MS ?? "", 10);
-  const timeoutMs = Number.isFinite(opts.timeoutMs) && (opts.timeoutMs ?? 0) > 0 ? Number(opts.timeoutMs) : Number.isFinite(envTimeout) && envTimeout > 0 ? envTimeout : 5e3;
+  const timeoutMs = resolveTeamShellReadyTimeoutMs(process.env, opts.timeoutMs);
   const pollIntervalMs = Number.isFinite(opts.pollIntervalMs) && (opts.pollIntervalMs ?? 0) > 0 ? Number(opts.pollIntervalMs) : 50;
   const deadline = Date.now() + timeoutMs;
   let lastStatus = "";
@@ -74418,7 +74480,7 @@ async function killTeamSession(sessionName2, workerPaneIds, leaderPaneId, option
   if (result.outcome === "executed") return true;
   return await observeTmuxServerIdentity(identity) === "dead";
 }
-var import_fs82, import_crypto30, import_child_process26, import_util11, import_path102, import_os16, sleep5, execFileAsync5, TMUX_SESSION_PREFIX, TMUX_LIVENESS_SERVER_RECHECK_ATTEMPTS, TMUX_LIVENESS_SERVER_RECHECK_DELAY_MS, CMUX_MEMBERSHIP_RETRY_ATTEMPTS, CMUX_MEMBERSHIP_RETRY_INTERVAL_MS, defaultTmuxServerIdentityDependencies, guardMarkerCounter, TMUX_MAILBOX_PANE_ID, TMUX_MAILBOX_TARGET, defaultMailboxTargetOwnershipDependencies, defaultDirectMailboxEffectDependencies, TeamSessionCreationError, SUPPORTED_POSIX_SHELLS, ZSH_CANDIDATES, BASH_CANDIDATES, DANGEROUS_LAUNCH_BINARY_CHARS;
+var import_fs82, import_crypto30, import_child_process26, import_util11, import_path102, import_os16, sleep5, execFileAsync5, TMUX_SESSION_PREFIX, TMUX_LIVENESS_SERVER_RECHECK_ATTEMPTS, TMUX_LIVENESS_SERVER_RECHECK_DELAY_MS, CMUX_MEMBERSHIP_RETRY_ATTEMPTS, CMUX_MEMBERSHIP_RETRY_INTERVAL_MS, defaultTmuxServerIdentityDependencies, guardMarkerCounter, TMUX_MAILBOX_PANE_ID, TMUX_MAILBOX_TARGET, defaultMailboxTargetOwnershipDependencies, defaultDirectMailboxEffectDependencies, TeamSessionCreationError, SUPPORTED_POSIX_SHELLS, ZSH_CANDIDATES, BASH_CANDIDATES, DECIMAL_INTEGER_TEXT3, DANGEROUS_LAUNCH_BINARY_CHARS;
 var init_tmux_session = __esm({
   "src/team/tmux-session.ts"() {
     "use strict";
@@ -74486,6 +74548,7 @@ var init_tmux_session = __esm({
     SUPPORTED_POSIX_SHELLS = /* @__PURE__ */ new Set(["sh", "bash", "zsh", "fish", "ksh"]);
     ZSH_CANDIDATES = ["/bin/zsh", "/usr/bin/zsh", "/usr/local/bin/zsh", "/opt/homebrew/bin/zsh"];
     BASH_CANDIDATES = ["/bin/bash", "/usr/bin/bash"];
+    DECIMAL_INTEGER_TEXT3 = /^(?:(\d+)(?:\.(\d*))?|\.(\d+))(?:[eE]([+-]?\d+))?$/;
     DANGEROUS_LAUNCH_BINARY_CHARS = /[;&|`$()<>\n\r\t\0]/;
   }
 });
@@ -84624,7 +84687,7 @@ function startReplyListener(_config) {
   }
   ensureStateDir3();
   const modulePath = resolveDaemonModulePath(__filename2, ["notifications", "reply-listener.js"]);
-  const moduleUrl = (0, import_url14.pathToFileURL)(modulePath).href;
+  const moduleUrl = (0, import_url15.pathToFileURL)(modulePath).href;
   const daemonScript = `
     import(${JSON.stringify(moduleUrl)}).then(({ pollLoop }) => {
       return pollLoop();
@@ -84813,13 +84876,13 @@ function processSlackSocketMessage(rawMessage, connectionState, paneId, config2,
   }
   return { injected: success, validation };
 }
-var import_fs91, import_path114, import_url14, import_child_process28, import_crypto33, import_https2, __filename2, SECURE_FILE_MODE2, MAX_LOG_SIZE_BYTES, DAEMON_ENV_ALLOWLIST, DEFAULT_STATE_DIR, PID_FILE_PATH, STATE_FILE_PATH, LOG_FILE_PATH, APPROVAL_APPROVE_WORDS, APPROVAL_DENY_WORDS, RateLimiter, discordBackoffUntil, PRUNE_INTERVAL_MS;
+var import_fs91, import_path114, import_url15, import_child_process28, import_crypto33, import_https2, __filename2, SECURE_FILE_MODE2, MAX_LOG_SIZE_BYTES, DAEMON_ENV_ALLOWLIST, DEFAULT_STATE_DIR, PID_FILE_PATH, STATE_FILE_PATH, LOG_FILE_PATH, APPROVAL_APPROVE_WORDS, APPROVAL_DENY_WORDS, RateLimiter, discordBackoffUntil, PRUNE_INTERVAL_MS;
 var init_reply_listener = __esm({
   "src/notifications/reply-listener.ts"() {
     "use strict";
     import_fs91 = require("fs");
     import_path114 = require("path");
-    import_url14 = require("url");
+    import_url15 = require("url");
     import_child_process28 = require("child_process");
     import_crypto33 = require("crypto");
     init_tmux_utils();
@@ -84834,7 +84897,7 @@ var init_reply_listener = __esm({
     init_platform();
     init_slack_socket();
     init_slack_socket();
-    __filename2 = (0, import_url14.fileURLToPath)(importMetaUrl);
+    __filename2 = (0, import_url15.fileURLToPath)(importMetaUrl);
     SECURE_FILE_MODE2 = 384;
     MAX_LOG_SIZE_BYTES = 1 * 1024 * 1024;
     DAEMON_ENV_ALLOWLIST = [
@@ -85640,7 +85703,7 @@ function workerEnvironment() {
 }
 function spawnSessionEndWorker(payload) {
   try {
-    const child = (0, import_child_process29.spawn)(process.execPath, [(0, import_url15.fileURLToPath)(importMetaUrl), WORKER_ARG, JSON.stringify(payload)], { detached: true, stdio: "ignore", env: workerEnvironment(), windowsHide: true });
+    const child = (0, import_child_process29.spawn)(process.execPath, [(0, import_url16.fileURLToPath)(importMetaUrl), WORKER_ARG, JSON.stringify(payload)], { detached: true, stdio: "ignore", env: workerEnvironment(), windowsHide: true });
     child.unref();
     return true;
   } catch {
@@ -85813,13 +85876,13 @@ function reconcileSessionEndJobs(directory, sessionIds) {
     if (ticket.nonce && !spawned) releaseSessionEndDiscoveryTicket(directory, ticket.sessionId, ticket.nonce, false);
   }
 }
-var import_child_process29, import_crypto34, import_url15, WORKER_ARG, MAX_WORKER_MS, workerIndex;
+var import_child_process29, import_crypto34, import_url16, WORKER_ARG, MAX_WORKER_MS, workerIndex;
 var init_worker = __esm({
   "src/hooks/session-end/worker.ts"() {
     "use strict";
     import_child_process29 = require("child_process");
     import_crypto34 = require("crypto");
-    import_url15 = require("url");
+    import_url16 = require("url");
     init_cleanup_manifest();
     init_action_runner();
     init_action_watchdog();
@@ -100733,7 +100796,8 @@ function getGitRepoName(cwd2) {
     if (!url) {
       result = null;
     } else {
-      const match = url.match(/\/([^/]+?)(?:\.git)?$/) || url.match(/:([^/]+?)(?:\.git)?$/);
+      const normalizedUrl = stripTrailingSlashes(url);
+      const match = normalizedUrl.match(/\/([^/]+?)(?:\.git)?$/) || normalizedUrl.match(/:([^/]+?)(?:\.git)?$/);
       result = match ? match[1].replace(/\.git$/, "") : null;
     }
   } catch {
@@ -100861,6 +100925,7 @@ var init_git = __esm({
     import_node_path35 = require("node:path");
     init_colors();
     init_types8();
+    init_url();
     CACHE_TTL_MS3 = 3e4;
     repoCache = /* @__PURE__ */ new Map();
     branchCache = /* @__PURE__ */ new Map();
@@ -101968,7 +102033,7 @@ function spawnSessionSummaryScript(transcriptPath, stateDir, sessionId) {
     return;
   }
   lastSummarySpawnTimestamp = now;
-  const thisDir = (0, import_path174.dirname)((0, import_url21.fileURLToPath)(importMetaUrl));
+  const thisDir = (0, import_path174.dirname)((0, import_url23.fileURLToPath)(importMetaUrl));
   const scriptPath = (0, import_path174.join)(
     thisDir,
     "..",
@@ -102269,7 +102334,7 @@ async function mainImpl(watchMode = false, skipInit = false) {
 function main2(watchMode = false, skipInit = false) {
   return withWorktreePathRenderScope(() => mainImpl(watchMode, skipInit));
 }
-var import_fs146, import_promises33, import_path174, import_child_process50, import_url21, SAME_WINDOW_TOLERANCE_MS, lastSummarySpawnTimestamp, summaryProcessPid;
+var import_fs146, import_promises33, import_path174, import_child_process50, import_url23, SAME_WINDOW_TOLERANCE_MS, lastSummarySpawnTimestamp, summaryProcessPid;
 var init_hud = __esm({
   "src/hud/index.ts"() {
     "use strict";
@@ -102291,7 +102356,7 @@ var init_hud = __esm({
     import_promises33 = require("fs/promises");
     import_path174 = require("path");
     import_child_process50 = require("child_process");
-    import_url21 = require("url");
+    import_url23 = require("url");
     init_worktree_paths();
     init_config_dir();
     SAME_WINDOW_TOLERANCE_MS = 60 * 1e3;
@@ -103406,6 +103471,37 @@ function getAllServers() {
 }
 
 // src/tools/lsp/client.ts
+var DECIMAL_INTEGER_TEXT = /^(?:(\d+)(?:\.(\d*))?|\.(\d+))(?:[eE]([+-]?\d+))?$/;
+var MAX_NODE_TIMER_DELAY_MS = 2147483647;
+function parseExactInteger(raw) {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const negative = trimmed.startsWith("-");
+  const magnitude = negative || trimmed.startsWith("+") ? trimmed.slice(1) : trimmed;
+  const match = DECIMAL_INTEGER_TEXT.exec(magnitude);
+  if (!match) return null;
+  const integerDigits = match[1] ?? "";
+  const fractionDigits = match[2] ?? match[3] ?? "";
+  const exponent = match[4] === void 0 ? 0 : Number(match[4]);
+  const shift = fractionDigits.length - exponent;
+  if (shift > 0) {
+    const significand = integerDigits + fractionDigits;
+    if (/[1-9]/.test(significand)) {
+      const trailingZeros = significand.length - significand.replace(/0+$/, "").length;
+      if (trailingZeros < shift) return null;
+    }
+  }
+  const parsed = (negative ? -1 : 1) * Number(magnitude);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+}
+function readPositiveIntEnv(name, fallback) {
+  const env2 = process.env[name];
+  if (!env2 || !env2.trim()) {
+    return fallback;
+  }
+  const parsed = parseExactInteger(env2);
+  return parsed !== null && parsed > 0 && parsed <= MAX_NODE_TIMER_DELAY_MS ? parsed : fallback;
+}
 var DEFAULT_LSP_REQUEST_TIMEOUT_MS = (() => {
   return readPositiveIntEnv("OMC_LSP_TIMEOUT_MS", 15e3);
 })();
@@ -103414,14 +103510,6 @@ function getLspRequestTimeout(serverConfig, method, baseTimeout = DEFAULT_LSP_RE
     return Math.max(baseTimeout, serverConfig.initializeTimeoutMs);
   }
   return baseTimeout;
-}
-function readPositiveIntEnv(name, fallback) {
-  const env2 = process.env[name];
-  if (!env2) {
-    return fallback;
-  }
-  const parsed = parseInt(env2, 10);
-  return !isNaN(parsed) && parsed > 0 ? parsed : fallback;
 }
 function fileUri(filePath) {
   return (0, import_url5.pathToFileURL)((0, import_path15.resolve)(filePath)).href;
@@ -115669,7 +115757,7 @@ init_ralph();
 init_todo_continuation();
 
 // src/hooks/bridge.ts
-var import_url16 = require("url");
+var import_url17 = require("url");
 var import_fs97 = require("fs");
 var import_path119 = require("path");
 init_worktree_paths();
@@ -120105,7 +120193,7 @@ function isSameEntryRealpath(entryUrl, moduleUrl) {
   if (!entryUrl) return true;
   if (entryUrl === moduleUrl) return true;
   try {
-    return (0, import_fs97.realpathSync)((0, import_url16.fileURLToPath)(entryUrl)) === (0, import_fs97.realpathSync)((0, import_url16.fileURLToPath)(moduleUrl));
+    return (0, import_fs97.realpathSync)((0, import_url17.fileURLToPath)(entryUrl)) === (0, import_fs97.realpathSync)((0, import_url17.fileURLToPath)(moduleUrl));
   } catch {
     return false;
   }
@@ -120118,7 +120206,7 @@ function isMainModule() {
     }
     const argvPath = process.argv[1];
     return isSameEntryRealpath(
-      argvPath ? (0, import_url16.pathToFileURL)(argvPath).href : void 0,
+      argvPath ? (0, import_url17.pathToFileURL)(argvPath).href : void 0,
       importMetaUrl
     );
   } catch {
@@ -120544,7 +120632,7 @@ var import_fs108 = require("fs");
 var import_child_process33 = require("child_process");
 var import_crypto37 = require("crypto");
 var import_path132 = require("path");
-var import_url17 = require("url");
+var import_url18 = require("url");
 init_worktree_paths();
 var CHECKPOINT_MAX_AGE_MS = 24 * 60 * 60 * 1e3;
 var CHECKPOINT_MAX_BYTES = 256 * 1024;
@@ -122504,10 +122592,10 @@ init_document_specialist();
 // src/commands/index.ts
 var import_fs122 = require("fs");
 var import_path147 = require("path");
-var import_url18 = require("url");
+var import_url19 = require("url");
 init_config_dir();
 init_frontmatter();
-var PACKAGED_COMMANDS_DIR = (0, import_path147.join)((0, import_path147.dirname)((0, import_url18.fileURLToPath)(importMetaUrl)), "..", "..", "commands");
+var PACKAGED_COMMANDS_DIR = (0, import_path147.join)((0, import_path147.dirname)((0, import_url19.fileURLToPath)(importMetaUrl)), "..", "..", "commands");
 
 // src/index.ts
 init_installer();
@@ -122750,7 +122838,7 @@ init_tmux_detector();
 // src/features/rate-limit-wait/daemon.ts
 var import_fs125 = require("fs");
 var import_path150 = require("path");
-var import_url19 = require("url");
+var import_url20 = require("url");
 var import_child_process39 = require("child_process");
 init_daemon_module_path();
 init_paths();
@@ -122811,7 +122899,7 @@ function shouldResumeBlockedPanesOnStatusChange(previousStatus, nextStatus) {
 }
 
 // src/features/rate-limit-wait/daemon.ts
-var __filename3 = (0, import_url19.fileURLToPath)(importMetaUrl);
+var __filename3 = (0, import_url20.fileURLToPath)(importMetaUrl);
 var DEFAULT_CONFIG5 = {
   pollIntervalMs: 60 * 1e3,
   // 1 minute
@@ -123160,7 +123248,7 @@ function startDaemon(config2) {
   }
   ensureStateDir7(cfg);
   const modulePath = resolveDaemonModulePath(__filename3, ["features", "rate-limit-wait", "daemon.js"]);
-  const moduleUrl = (0, import_url19.pathToFileURL)(modulePath).href;
+  const moduleUrl = (0, import_url20.pathToFileURL)(modulePath).href;
   const configId = Date.now().toString(36) + Math.random().toString(36).slice(2);
   const configPath = (0, import_path150.join)((0, import_path150.dirname)(cfg.stateFilePath), `.daemon-config-${configId}.json`);
   try {
@@ -128868,7 +128956,7 @@ function bootstrapTeleportDependencies(parentRepoRoot, worktreePath, options) {
   return { mode: "install", packageManager };
 }
 function parseRef(ref) {
-  const ghPrUrlMatch = ref.match(/^https?:\/\/[^/]*github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)(?:[?#].*)?$/);
+  const ghPrUrlMatch = ref.match(/^https?:\/\/[^/]*github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)(?:\/[^?#]*)?(?:[?#].*)?$/);
   if (ghPrUrlMatch) {
     return {
       type: "pr",
@@ -128878,7 +128966,7 @@ function parseRef(ref) {
       provider: "github"
     };
   }
-  const ghIssueUrlMatch = ref.match(/^https?:\/\/[^/]*github\.com\/([^/]+)\/([^/]+)\/issues\/(\d+)(?:[?#].*)?$/);
+  const ghIssueUrlMatch = ref.match(/^https?:\/\/[^/]*github\.com\/([^/]+)\/([^/]+)\/issues\/(\d+)(?:\/[^?#]*)?(?:[?#].*)?$/);
   if (ghIssueUrlMatch) {
     return {
       type: "issue",
@@ -128888,7 +128976,7 @@ function parseRef(ref) {
       provider: "github"
     };
   }
-  const glMrUrlMatch = ref.match(/^https?:\/\/[^/]*gitlab[^/]*\/(.+)\/-\/merge_requests\/(\d+)(?:[?#].*)?$/);
+  const glMrUrlMatch = ref.match(/^https?:\/\/[^/]*gitlab[^/]*\/(.+)\/-\/merge_requests\/(\d+)(?:\/[^?#]*)?(?:[?#].*)?$/);
   if (glMrUrlMatch) {
     const namespaceParts = glMrUrlMatch[1].split("/");
     const repo = namespaceParts.pop();
@@ -128901,7 +128989,7 @@ function parseRef(ref) {
       provider: "gitlab"
     };
   }
-  const glIssueUrlMatch = ref.match(/^https?:\/\/[^/]*gitlab[^/]*\/(.+)\/-\/issues\/(\d+)(?:[?#].*)?$/);
+  const glIssueUrlMatch = ref.match(/^https?:\/\/[^/]*gitlab[^/]*\/(.+)\/-\/issues\/(\d+)(?:\/[^?#]*)?(?:[?#].*)?$/);
   if (glIssueUrlMatch) {
     const namespaceParts = glIssueUrlMatch[1].split("/");
     const repo = namespaceParts.pop();
@@ -128914,7 +129002,7 @@ function parseRef(ref) {
       provider: "gitlab"
     };
   }
-  const bbPrUrlMatch = ref.match(/^https?:\/\/[^/]*bitbucket\.org\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)(?:[?#].*)?$/);
+  const bbPrUrlMatch = ref.match(/^https?:\/\/[^/]*bitbucket\.org\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)(?:\/[^?#]*)?(?:[?#].*)?$/);
   if (bbPrUrlMatch) {
     return {
       type: "pr",
@@ -128924,7 +129012,7 @@ function parseRef(ref) {
       provider: "bitbucket"
     };
   }
-  const bbIssueUrlMatch = ref.match(/^https?:\/\/[^/]*bitbucket\.org\/([^/]+)\/([^/]+)\/issues\/(\d+)(?:[?#].*)?$/);
+  const bbIssueUrlMatch = ref.match(/^https?:\/\/[^/]*bitbucket\.org\/([^/]+)\/([^/]+)\/issues\/(\d+)(?:\/[^?#]*)?(?:[?#].*)?$/);
   if (bbIssueUrlMatch) {
     return {
       type: "issue",
@@ -128934,7 +129022,7 @@ function parseRef(ref) {
       provider: "bitbucket"
     };
   }
-  const azPrUrlMatch = ref.match(/^https?:\/\/[^/]*dev\.azure\.com\/([^/]+)\/([^/]+)\/_git\/([^/]+)\/pullrequest\/(\d+)(?:[?#].*)?$/);
+  const azPrUrlMatch = ref.match(/^https?:\/\/[^/]*dev\.azure\.com\/([^/]+)\/([^/]+)\/_git\/([^/]+)\/pullrequest\/(\d+)(?:\/[^?#]*)?(?:[?#].*)?$/);
   if (azPrUrlMatch) {
     return {
       type: "pr",
@@ -130542,7 +130630,7 @@ var import_fs134 = require("fs");
 var import_promises32 = require("fs/promises");
 var import_os27 = require("os");
 var import_path160 = require("path");
-var import_url20 = require("url");
+var import_url21 = require("url");
 init_security_config();
 var ASK_USAGE = [
   "Usage: omc ask <claude|codex|gemini|antigravity|grok|cursor|muse> <question or task>",
@@ -130579,7 +130667,7 @@ function getPackageRoot() {
     }
   }
   try {
-    const __filename4 = (0, import_url20.fileURLToPath)(importMetaUrl);
+    const __filename4 = (0, import_url21.fileURLToPath)(importMetaUrl);
     const __dirname2 = (0, import_path160.dirname)(__filename4);
     return (0, import_path160.join)(__dirname2, "..", "..");
   } catch {

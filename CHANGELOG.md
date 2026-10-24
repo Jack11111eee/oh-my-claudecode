@@ -1,17 +1,24 @@
-# oh-my-claudecode v5.7.11: Safer guarded input around trust prompts
+# oh-my-claudecode v5.7.12: More reliable URL and timeout handling
 
 ## Release Notes
 
-This release prevents guarded pane input from typing into any trust prompt or selecting a trust decision. Thanks to @iyoda for the contribution to #4528.
+This release improves parsing of provider and issue URLs ending in slashes or sub-pages, hardens environment-based timeout handling, and preserves tmux pane IDs when session names contain spaces. Thanks to @rudycelekli for contributions to #4542, #4543, #4544, #4545, #4546, #4547, and #4549.
 
 ### Bug Fixes
 
-- **fix(team): refuse guarded pane input on every trust prompt kind** (#4528, @iyoda)
+- **fix(teleport): read PR and issue URLs with a trailing slash or sub-page** (#4542, @rudycelekli)
+- **fix(lsp): read whole-integer timeouts from the environment** (#4543, @rudycelekli)
+- **fix(rate-limit-wait): keep pane IDs for tmux sessions with spaces** (#4544, @rudycelekli)
+- **fix(team): read the shell-ready timeout as a whole integer** (#4545, @rudycelekli)
+- **fix(team): read launch-ack timeouts as whole integers** (#4546, @rudycelekli)
+- **fix(team): read the worker-ready timeout as a whole integer** (#4547, @rudycelekli)
+- **fix(providers): parse remote URLs that end in a slash** (#4549, @rudycelekli)
 
 ### Other Changes
 
-- **chore(sync): merge main v5.7.10 release into dev** (#4532)
-- **ci: authorize generated artifacts for sync PR #4532** (#4533)
+- **chore(sync): merge main's v5.7.11 release into dev** (#4540)
+- **ci: authorize generated artifacts for sync PR #4540** (#4541)
+- **ci: authorize generated artifacts for an earlier main-to-dev sync attempt** (#4539)
 
 ---
 
