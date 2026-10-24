@@ -4,6 +4,38 @@
   "owner": "Yeachan-Heo",
   "authorizations": [
     {
+      "pullNumber": 4551,
+      "targetRef": "dev",
+      "mergeBaseSha": "11817905a98e823e8f0e59951d40341082e392b8",
+      "headSha": "2d46e5d12f45f54679092c0995b48f50df5cc849",
+      "owner": "Yeachan-Heo",
+      "expiresAt": "2026-11-07T02:31:51.000Z",
+      "generatedDelta": {
+        "count": 3,
+        "sha256": "4d4ce1522daac2fd3fd5a7820ebef8666c9682c71b54760073a8b38969b486a9"
+      },
+      "generatedFiles": [
+        {
+          "status": "modified",
+          "filename": "dist/hooks/keyword-detector/index.d.ts.map",
+          "sha": "6be61308b43d11ac06fb704a751218c670973f65",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/hooks/keyword-detector/index.js",
+          "sha": "92b5bcebe186eef717ce24030a57315e4525c0b0",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/hooks/keyword-detector/index.js.map",
+          "sha": "1f286c150e7d97afc65cec32a42b8885f3429cb6",
+          "previousFilename": null
+        }
+      ]
+    },
+    {
       "pullNumber": 3537,
       "targetRef": "main",
       "mergeBaseSha": "76c90920b74494df6e34d6165be963bca8a9adf6",
