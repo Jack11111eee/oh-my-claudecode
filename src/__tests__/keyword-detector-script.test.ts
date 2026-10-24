@@ -1446,7 +1446,9 @@ describe('keyword-detector.mjs #4551 regression tests', () => {
   it.each([
     ['ralph fix 説明文の誤字', 'RALPH'],
     ['autopilot build a 说明 component', 'AUTOPILOT'],
-  ])('should keep a colonless leading command actionable: %s', (prompt, mode) => {
+    ['ralph: update the explanation in README', 'RALPH'],
+    ['ralph: remove the explanation section', 'RALPH'],
+  ])('should keep a leading command actionable: %s', (prompt, mode) => {
     const output = runKeywordDetector(prompt, process.cwd(), 'test-4553-colonless');
     expect(output.hookSpecificOutput?.additionalContext).toContain(`[MAGIC KEYWORD: ${mode}]`);
   });

@@ -344,6 +344,8 @@ const INFORMATIONAL_INTENT_PATTERNS = [
   /(?:什么是|什麼是|怎(?:么|樣)用|如何使用|解释|說明|说明)/u,
   /(?:ทำไม|อะไร|ยังไง|อย่างไร|คืออะไร|หมายถึง|แปลว่า|อธิบาย|มั้ย|ไหม|เหรอ|หรอ|หรือไม่|หรือเปล่า|ใช่ไหม|ถูกมั้ย|เกี่ยวกับ|เหมือน)/u,
 ];
+const STRONG_HELP_QUERY_PATTERN =
+  /\?|？|\b(?:how\s+(?:to|do\s+i)\s+use|what(?:'s|\s+is)|explain|describe|tell\s+me\s+about)\b|(?:사용법|使い方|什么是|怎么用|如何使用)/iu;
 const INFORMATIONAL_CONTEXT_WINDOW = 80;
 const QUOTED_SPAN_PATTERN =
   /"[^"\n]{1,400}"|'[^'\n]{1,400}'|“[^”\n]{1,400}”|‘[^’\n]{1,400}’/g;
@@ -700,7 +702,7 @@ function isInformationalKeywordContext(text, position, keywordLength, keywordTex
   const end = Math.min(text.length, position + keywordLength + INFORMATIONAL_CONTEXT_WINDOW);
   const context = text.slice(start, end);
   const hasInformationalIntent = INFORMATIONAL_INTENT_PATTERNS.some((pattern) => pattern.test(context));
-  const hasStrongHelpQueryIntent = /\?|？|\b(?:how\s+(?:to|do\s+i)\s+use|what(?:'s|\s+is)|explain|describe|tell\s+me\s+about)\b|(?:사용법|使い方|什么是|怎么用|如何使用)/iu.test(context);
+  const hasStrongHelpQueryIntent = STRONG_HELP_QUERY_PATTERN.test(context);
   const lineBounds = getLineBounds(text, position);
   const line = text.slice(lineBounds.start, lineBounds.end);
   const questionOutsideQuotes = stripQuotedSpans(text);
@@ -759,7 +761,11 @@ function isInformationalKeywordContext(text, position, keywordLength, keywordTex
     if (hasActionableCommandSeparatorInvocation || hasLeadingCommandVerb(text, position, keywordLength)) {
       return false;
     }
-    return INFORMATIONAL_INTENT_PATTERNS.some((pattern) => pattern.test(line));
+    // English help needs a help-query construction on the line, so task
+    // objects such as "update the explanation" stay actionable; the other
+    // languages keep their dedicated informational phrasing patterns.
+    return INFORMATIONAL_INTENT_PATTERNS.slice(1).some((pattern) => pattern.test(line)) ||
+      (INFORMATIONAL_INTENT_PATTERNS[0].test(line) && STRONG_HELP_QUERY_PATTERN.test(line));
   }
 
   if (keywordText) {

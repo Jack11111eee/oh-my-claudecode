@@ -540,6 +540,8 @@ Final draft.`);
         expect(detectKeywordsWithType('ralph: fix 説明文の誤字').find((r) => r.type === 'ralph')).toBeDefined();
         expect(detectKeywordsWithType('ralph fix 説明文の誤字').find((r) => r.type === 'ralph')).toBeDefined();
         expect(detectKeywordsWithType('autopilot build a 说明 component').find((r) => r.type === 'autopilot')).toBeDefined();
+        expect(detectKeywordsWithType('ralph: update the explanation in README').find((r) => r.type === 'ralph')).toBeDefined();
+        expect(detectKeywordsWithType('ralph: remove the explanation section').find((r) => r.type === 'ralph')).toBeDefined();
       });
 
       it('should suppress colon-invocation with multilingual help queries', () => {
