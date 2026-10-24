@@ -1429,6 +1429,20 @@ describe('keyword-detector.mjs #4551 regression tests', () => {
     expect(result2.hookSpecificOutput?.additionalContext).toContain('IMPORTANT: Start the autopilot workflow immediately');
   });
 
+  it.each(['ralph: 설명해줘', 'autopilot: 알려줘', 'autopilot: 解释一下'])(
+    'should suppress a leading invocation whose own line is a help request: %s',
+    (prompt) => {
+      const output = runKeywordDetector(prompt, process.cwd(), 'test-4553-help');
+      expect(output.continue).toBe(true);
+      expect(output.hookSpecificOutput).toBeUndefined();
+    },
+  );
+
+  it('should keep a leading invocation actionable when its task text contains a help word', () => {
+    const output = runKeywordDetector('ralph: fix 説明文の誤字', process.cwd(), 'test-4553-fix');
+    expect(output.hookSpecificOutput?.additionalContext).toContain('[MAGIC KEYWORD: RALPH]');
+  });
+
   it('should suppress colon-invocation with multilingual help queries', () => {
     // Issue 2: Multilingual help queries with colon prefix should NOT activate
     // Korean: "기능 알려줘" (tell me about the feature)

@@ -530,6 +530,16 @@ Final draft.`);
         expect(result2.find((r) => r.type === 'autopilot')).toBeDefined();
       });
 
+      it('should suppress leading invocations whose own line is a multilingual help request', () => {
+        expect(detectKeywordsWithType('ralph: 설명해줘')).toEqual([]);
+        expect(detectKeywordsWithType('autopilot: 알려줘')).toEqual([]);
+        expect(detectKeywordsWithType('autopilot: 解释一下')).toEqual([]);
+      });
+
+      it('should keep a leading invocation actionable when its task text contains a help word', () => {
+        expect(detectKeywordsWithType('ralph: fix 説明文の誤字').find((r) => r.type === 'ralph')).toBeDefined();
+      });
+
       it('should suppress colon-invocation with multilingual help queries', () => {
         // Issue 2: Multilingual help queries with colon prefix should NOT activate
         // Korean: "기능 알려줘" (tell me about the feature)
