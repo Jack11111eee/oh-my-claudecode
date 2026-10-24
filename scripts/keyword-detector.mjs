@@ -735,7 +735,8 @@ function isAutopilotCreationAlias(keywordText) {
 
 function hasActionableCommandAfterSeparator(text, position, keywordLength) {
   const suffix = text.slice(position + keywordLength).match(/^\s*[:：]\s*([^\n]{0,80})/u)?.[1] ?? '';
-  if (/\?|？|\b(?:what(?:'s|\s+is)|how\s+(?:to|do\s+i)\s+use|explain|describe|tell\s+me\s+about)\b/iu.test(suffix)) {
+  const helpQueryPattern = /\?|？|\b(?:what(?:'s|\s+is)|how\s+(?:to|do\s+i)\s+use|explain|describe|tell\s+me\s+about)\b|(?:사용법|是什么|什么是|怎么用|如何|使用方法|使い方|説明|教えて|아무|어떻게|뭐야|뭔가|알눤|기능|คือ|ใช|ยัง)/iu;
+  if (helpQueryPattern.test(suffix)) {
     return false;
   }
   return /\b(?:fix|debug|investigate|resolve|handle|patch|address|implement|build|create|make|run|start|enable|activate|invoke|trigger|launch)\b|(?:ทำ|ทํา|สร้าง|แก้|เปิด|รัน|เรียก|เริ่ม)/iu.test(suffix);
@@ -776,7 +777,7 @@ function isInformationalKeywordContext(text, position, keywordLength, keywordTex
   const end = Math.min(text.length, position + keywordLength + INFORMATIONAL_CONTEXT_WINDOW);
   const context = text.slice(start, end);
   const hasInformationalIntent = INFORMATIONAL_INTENT_PATTERNS.some((pattern) => pattern.test(context));
-  const hasStrongHelpQueryIntent = /\?|？|\b(?:how\s+(?:to|do\s+i)\s+use|what(?:'s|\s+is)|explain|describe|tell\s+me\s+about)\b|(?:사용법|使い方|什么是|怎么用|如何使用)/iu.test(context);
+  const hasStrongHelpQueryIntent = /\?|？|\b(?:how\s+(?:to|do\s+i)\s+use|what(?:'s|\s+is)|explain|describe|tell\s+me\s+about)\b|(?:사용법|是什么|什么是|怎么用|如何|使用方法|使い方|説明|教えて|아무|어떻게|뭐야|뭔가|알눤|기능|คือ|ใช|ยัง)/iu.test(context);
   const lineBounds = getLineBounds(text, position);
   const line = text.slice(lineBounds.start, lineBounds.end);
   const questionOutsideQuotes = stripQuotedSpans(text);
@@ -827,16 +828,18 @@ function isInformationalKeywordContext(text, position, keywordLength, keywordTex
     }
   }
 
-  // Keep clear help questions informational, but do not let later reference
-  // prose suppress a direct leading invocation.
-  if (keywordText && hasDirectLeadingInvocation(text, position, keywordLength)) {
-    return hasInformationalIntent && hasStrongHelpQueryIntent;
-  }
-
   if (keywordText) {
     const hasActivationIntent = hasActivationIntentNearKeyword(context, keywordText);
     if (hasActionableCommandSeparatorInvocation) {
       return false;
+    }
+
+    // Keep clear help questions informational, but do not let later reference
+    // prose suppress a direct leading invocation. This check runs AFTER the
+    // hasActionableCommandSeparatorInvocation check so that explicit commands
+    // like 'ralph: fix bug.\nExplain...' remain actionable even with help-like text.
+    if (hasDirectLeadingInvocation(text, position, keywordLength)) {
+      return hasInformationalIntent && hasStrongHelpQueryIntent;
     }
 
     if (isAutopilotCreationAlias(keywordText)) {

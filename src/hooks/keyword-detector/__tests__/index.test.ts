@@ -518,6 +518,29 @@ Final draft.`);
         const ralphMatch = result.find((r) => r.type === 'ralph');
         expect(ralphMatch).toBeUndefined();
       });
+
+      // Regression tests for #4551 regressions
+      it('should detect colon-invocation with execution verb even if followed by help-like text', () => {
+        // Issue 1: 'ralph: fix the bug.\nExplain the change.' must activate (not suppress as informational)
+        const result1 = detectKeywordsWithType('ralph: fix the bug.\nExplain the change.');
+        expect(result1.find((r) => r.type === 'ralph')).toBeDefined();
+
+        // Issue 1: 'autopilot: build an API.\nDescribe the endpoints.' must activate
+        const result2 = detectKeywordsWithType('autopilot: build an API.\nDescribe the endpoints.');
+        expect(result2.find((r) => r.type === 'autopilot')).toBeDefined();
+      });
+
+      it('should suppress colon-invocation with multilingual help queries', () => {
+        // Issue 2: Multilingual help queries with colon prefix should NOT activate
+        // Korean: "기능 알려줘" (tell me about the feature)
+        expect(detectKeywordsWithType('autopilot: 기능 알려줘')).toEqual([]);
+
+        // Japanese: "機能を説明して" (explain the feature)
+        expect(detectKeywordsWithType('ralph: 機能を説明して')).toEqual([]);
+
+        // Thai: "คืออะไร ใช้งานยังไง" (what is it, how to use it)
+        expect(detectKeywordsWithType('autopilot: คืออะไร ใช้งานยังไง')).toEqual([]);
+      });
     });
 
     describe('autopilot keyword', () => {
