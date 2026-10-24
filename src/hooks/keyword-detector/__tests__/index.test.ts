@@ -554,7 +554,9 @@ Final draft.`);
         expect(detectKeywordsWithType('autopilot: what are the build options')).toEqual([]);
         expect(detectKeywordsWithType('autopilot: how to use build and explain the results')).toEqual([]);
         expect(detectKeywordsWithType('ralph: how do I use run and describe the results')).toEqual([]);
+        expect(detectKeywordsWithType('ralph: how to use run and describe the results')).toEqual([]);
         expect(detectKeywordsWithType('autopilot: 解释如何修复登录问题')).toEqual([]);
+        expect(detectKeywordsWithType('autopilot: 说明一下如何使用 build')).toEqual([]);
       });
 
       it('should keep a leading invocation actionable despite help-looking task text', () => {
@@ -565,6 +567,8 @@ Final draft.`);
         expect(detectKeywordsWithType('ralph: fix the login bug; 결과 알려줘').find((r) => r.type === 'ralph')).toBeDefined();
         expect(detectKeywordsWithType('ralph: fix the login bug; 変更内容を説明して').find((r) => r.type === 'ralph')).toBeDefined();
         expect(detectKeywordsWithType('ralph: fix the login bug; 解释一下结果').find((r) => r.type === 'ralph')).toBeDefined();
+        expect(detectKeywordsWithType('autopilot: build a 说明 component').find((r) => r.type === 'autopilot')).toBeDefined();
+        expect(detectKeywordsWithType('ralph: fix 说明文档中的拼写错误').find((r) => r.type === 'ralph')).toBeDefined();
         expect(detectKeywordsWithType('autopilot: build a button labelled "教えて"').find((r) => r.type === 'autopilot')).toBeDefined();
         expect(detectKeywordsWithType('ralph: fix the "알려줘" button').find((r) => r.type === 'ralph')).toBeDefined();
         expect(detectKeywordsWithType('autopilot: build a button labelled "how to use"').find((r) => r.type === 'autopilot')).toBeDefined();

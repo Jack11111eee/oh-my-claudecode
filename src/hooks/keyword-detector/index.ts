@@ -403,7 +403,7 @@ const STRONG_HELP_QUERY_PATTERN =
 // Help-request constructions ("tell me", "how to use", "what is"), not bare
 // help terms or particles such as 사용법, 使い方, or とは, keep task objects actionable.
 const MULTILINGUAL_HELP_REQUEST_PATTERN =
-  /(?:알려\s?줘|알려줄래|설명해\s?줘|뭐야|뭔데|어떻게\s*(?:써|쓰|사용)|教えて|説明して|って何|如何使用|怎(?:么|樣)用|是什么|什么是|解释|說明|说明|คืออะไร|ใช้(?:งาน)?ยังไง|ใช้(?:งาน)?อย่างไร)/u;
+  /(?:알려\s?줘|알려줄래|설명해\s?줘|뭐야|뭔데|어떻게\s*(?:써|쓰|사용)|教えて|説明して|って何|如何使用|怎(?:么|樣)用|是什么|什么是|(?:解释|說明|说明)(?:一下|下|如何|怎么|怎麼|怎样|怎樣)|คืออะไร|ใช้(?:งาน)?ยังไง|ใช้(?:งาน)?อย่างไร)/u;
 const ENGLISH_HELP_REQUEST_PATTERN =
   /\b(?:what(?:'s|\s+is)|what\s+are|how\s+(?:to|do\s+i)\s+use|explain|describe|tell\s+me\s+about)\b/iu;
 const TASK_ACTION_VERB_PATTERN =
