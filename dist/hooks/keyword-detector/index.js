@@ -406,21 +406,7 @@ function hasActivationIntentNearKeyword(context, keyword) {
 }
 function hasDirectInvocationPrefix(text, position) {
     const prefix = text.slice(0, position);
-    return /^\s*(?:[$/!]\s*|force:\s*|\/?oh-my-(?:claudecode|codex):\s*)?$/i.test(prefix);
-}
-// A leading alias is direct only with invocation syntax or an action; a bare
-// alias can be ordinary prose in supported languages.
-function hasDirectLeadingInvocation(text, position, keywordLength) {
-    const prefix = text.slice(0, position);
-    if (!hasDirectInvocationPrefix(text, position)) {
-        return false;
-    }
-    if (/^\s*\/oh-my-(?:claudecode|codex):\s*$/i.test(prefix)) {
-        return true;
-    }
-    const suffix = text.slice(position + keywordLength);
-    return /^\s*[:：]/.test(suffix) ||
-        /^\s+(?:fix|debug|investigate|resolve|handle|patch|address|implement|build|create|make|run|start|enable|activate|invoke|trigger|launch|plan)\b/i.test(suffix);
+    return /^\s*(?:[$/!]\s*|force:\s*|oh-my-(?:claudecode|codex):\s*)?$/i.test(prefix);
 }
 function hasConversationalInvocationNearKeyword(text, position, _keywordLength, _keywordText) {
     if (isWithinQuotedSpan(text, position)) {
@@ -548,11 +534,6 @@ function isInformationalKeywordContext(text, position, keywordLength, keywordTex
         if (!hasGenuineCommandNearQuote) {
             return true;
         }
-    }
-    // Keep clear help questions informational, but do not let later reference
-    // prose suppress a direct leading invocation.
-    if (keywordText && hasDirectLeadingInvocation(text, position, keywordLength)) {
-        return hasInformationalIntent && hasStrongHelpQueryIntent;
     }
     if (keywordText) {
         const hasActivationIntent = hasActivationIntentNearKeyword(context, keywordText);
