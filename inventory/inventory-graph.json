@@ -5,15 +5,15 @@
   "provenance": {
     "base": "05c800f40d1ad53b42a78609d2667ef4f726808b",
     "planningHead": "0a91273e61dbbd47eb0af4c02844409251e08398",
-    "head": "a9e2255c9209c4a23c77801cbbba8846218dcaa6",
-    "sourceSha256": "8c6ddb6203fa10d3ff804c5877d6d32d65c8abc7490a723f647663033e5ca858",
+    "head": "a180f39b6c3b4f7685666eb0fea6bf73fc63fd86",
+    "sourceSha256": "eb264daf01824c988b4f9532aa91714cff953d346b9ae2036ed6a1140dd07938",
     "generatedAt": null,
     "generator": "scripts/generate-inventory-graph.mjs"
   },
   "base": "05c800f40d1ad53b42a78609d2667ef4f726808b",
   "planningHead": "0a91273e61dbbd47eb0af4c02844409251e08398",
-  "head": "a9e2255c9209c4a23c77801cbbba8846218dcaa6",
-  "sourceSha256": "8c6ddb6203fa10d3ff804c5877d6d32d65c8abc7490a723f647663033e5ca858",
+  "head": "a180f39b6c3b4f7685666eb0fea6bf73fc63fd86",
+  "sourceSha256": "eb264daf01824c988b4f9532aa91714cff953d346b9ae2036ed6a1140dd07938",
   "counts": {
     "public": {
       "skills": 48,
@@ -28,13 +28,13 @@
       "toolFiles": 65,
       "libFiles": 48,
       "templateHooks": 24,
-      "srcFiles": 1484,
-      "total": 1508
+      "srcFiles": 1485,
+      "total": 1509
     },
     "generated": {
-      "distFiles": 5741,
+      "distFiles": 5739,
       "bridgeFiles": 9,
-      "total": 5750
+      "total": 5748
     },
     "prompt": {
       "promptLikeFiles": 62
@@ -6624,8 +6624,6 @@
       "dist/utils/string-width.d.ts.map",
       "dist/utils/string-width.js",
       "dist/utils/string-width.js.map",
-      "dist/utils/url.d.ts",
-      "dist/utils/url.js",
       "dist/utils/user-skill-compat.d.ts",
       "dist/utils/user-skill-compat.d.ts.map",
       "dist/utils/user-skill-compat.js",
@@ -36704,16 +36702,6 @@
         "path": "dist/utils/string-width.js.map"
       },
       {
-        "id": "dist/utils/url.d.ts",
-        "kind": "generated-dist",
-        "path": "dist/utils/url.d.ts"
-      },
-      {
-        "id": "dist/utils/url.js",
-        "kind": "generated-dist",
-        "path": "dist/utils/url.js"
-      },
-      {
         "id": "dist/utils/user-skill-compat.d.ts",
         "kind": "generated-dist",
         "path": "dist/utils/user-skill-compat.d.ts"
@@ -45117,6 +45105,11 @@
         "id": "src/team/__tests__/stage-router.test.ts",
         "kind": "src",
         "path": "src/team/__tests__/stage-router.test.ts"
+      },
+      {
+        "id": "src/team/__tests__/start-submit-timeout-env.test.ts",
+        "kind": "src",
+        "path": "src/team/__tests__/start-submit-timeout-env.test.ts"
       },
       {
         "id": "src/team/__tests__/startup-claim-error.test.ts",
@@ -81166,6 +81159,16 @@
         "kind": "imports"
       },
       {
+        "from": "src/team/__tests__/start-submit-timeout-env.test.ts",
+        "to": "external:vitest",
+        "kind": "imports"
+      },
+      {
+        "from": "src/team/__tests__/start-submit-timeout-env.test.ts",
+        "to": "src/team/tmux-session.ts",
+        "kind": "imports"
+      },
+      {
         "from": "src/team/__tests__/startup-claim-error.test.ts",
         "to": "external:vitest",
         "kind": "imports"
@@ -89872,12 +89875,12 @@
       }
     ],
     "stats": {
-      "nodeCount": 7893,
-      "edgeCount": 8632,
-      "importEdgeCount": 7189,
+      "nodeCount": 7892,
+      "edgeCount": 8634,
+      "importEdgeCount": 7191,
       "registerEdgeCount": 69
     }
   },
-  "inventorySha256": "da20900b09d9f868d68f247aded219bd036f829d47eb0e2fd5ee8810e55838b5",
-  "manifestSha256": "d77a90bc092a9b7576593fd05e00ff6338bd11b1812137e84c041bda45843f29"
+  "inventorySha256": "5ed1779df9780ddd15b7160a6e998a10a8a14eb675a80c2382a0260110bd59a4",
+  "manifestSha256": "55a2b63e8a1f24bbf982bacb55b895fda602e4dd428ea920f41c20077fe75426"
 }
