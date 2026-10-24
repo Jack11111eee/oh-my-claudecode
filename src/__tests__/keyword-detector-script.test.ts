@@ -1443,6 +1443,14 @@ describe('keyword-detector.mjs #4551 regression tests', () => {
     expect(output.hookSpecificOutput?.additionalContext).toContain('[MAGIC KEYWORD: RALPH]');
   });
 
+  it.each([
+    ['ralph fix 説明文の誤字', 'RALPH'],
+    ['autopilot build a 说明 component', 'AUTOPILOT'],
+  ])('should keep a colonless leading command actionable: %s', (prompt, mode) => {
+    const output = runKeywordDetector(prompt, process.cwd(), 'test-4553-colonless');
+    expect(output.hookSpecificOutput?.additionalContext).toContain(`[MAGIC KEYWORD: ${mode}]`);
+  });
+
   it('should suppress colon-invocation with multilingual help queries', () => {
     // Issue 2: Multilingual help queries with colon prefix should NOT activate
     // Korean: "기능 알려줘" (tell me about the feature)

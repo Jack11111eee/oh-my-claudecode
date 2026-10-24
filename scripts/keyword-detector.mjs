@@ -644,9 +644,13 @@ function hasDirectLeadingInvocation(text, position, keywordLength) {
     return true;
   }
 
-  const suffix = text.slice(position + keywordLength);
-  return /^\s*[:：]/.test(suffix) ||
-    /^\s+(?:fix|debug|investigate|resolve|handle|patch|address|implement|build|create|make|run|start|enable|activate|invoke|trigger|launch|plan)\b/i.test(suffix);
+  return /^\s*[:：]/.test(text.slice(position + keywordLength)) || hasLeadingCommandVerb(text, position, keywordLength);
+}
+
+function hasLeadingCommandVerb(text, position, keywordLength) {
+  return /^\s+(?:fix|debug|investigate|resolve|handle|patch|address|implement|build|create|make|run|start|enable|activate|invoke|trigger|launch|plan)\b/i.test(
+    text.slice(position + keywordLength),
+  );
 }
 
 function hasConversationalInvocationNearKeyword(text, position, _keywordLength, _keywordText) {
@@ -827,11 +831,12 @@ function isInformationalKeywordContext(text, position, keywordLength, keywordTex
     }
   }
 
-  // A direct leading invocation is decided by its own line: an actionable
-  // command after the separator always runs, a help request on that line
-  // stays informational, and later prose never suppresses it.
+  // A direct leading invocation is decided by its own line: a command verb
+  // right after the keyword or an actionable command after the separator
+  // always runs, a help request on that line stays informational, and later
+  // prose never suppresses it.
   if (keywordText && hasDirectLeadingInvocation(text, position, keywordLength)) {
-    if (hasActionableCommandSeparatorInvocation) {
+    if (hasActionableCommandSeparatorInvocation || hasLeadingCommandVerb(text, position, keywordLength)) {
       return false;
     }
     return INFORMATIONAL_INTENT_PATTERNS.some((pattern) => pattern.test(line));

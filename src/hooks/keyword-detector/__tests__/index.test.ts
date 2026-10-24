@@ -538,6 +538,8 @@ Final draft.`);
 
       it('should keep a leading invocation actionable when its task text contains a help word', () => {
         expect(detectKeywordsWithType('ralph: fix 説明文の誤字').find((r) => r.type === 'ralph')).toBeDefined();
+        expect(detectKeywordsWithType('ralph fix 説明文の誤字').find((r) => r.type === 'ralph')).toBeDefined();
+        expect(detectKeywordsWithType('autopilot build a 说明 component').find((r) => r.type === 'autopilot')).toBeDefined();
       });
 
       it('should suppress colon-invocation with multilingual help queries', () => {
