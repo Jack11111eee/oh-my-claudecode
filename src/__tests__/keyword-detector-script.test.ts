@@ -1448,6 +1448,9 @@ describe('keyword-detector.mjs #4551 regression tests', () => {
     'autopilot: what are the build options?',
     'ralph: what are the results of the last run?',
     'autopilot: what are the build options',
+    'autopilot: how to use build and explain the results',
+    'ralph: how do I use run and describe the results',
+    'autopilot: 解释如何修复登录问题',
   ])('should keep a leading help request informational: %s', (prompt) => {
     for (const detectorPath of [SCRIPT_PATH, TEMPLATE_PATH]) {
       const output = runKeywordDetector(prompt, process.cwd(), 'test-4553-followup-help', {}, detectorPath);
@@ -1474,6 +1477,7 @@ describe('keyword-detector.mjs #4551 regression tests', () => {
     ['ralph:\n使い方ページの誤字を修正して', 'RALPH'],
     ['ralph: fix the login bug; 결과 알려줘', 'RALPH'],
     ['ralph: fix the login bug; 変更内容を説明して', 'RALPH'],
+    ['ralph: fix the login bug; 解释一下结果', 'RALPH'],
     ['autopilot: build a button labelled "教えて"', 'AUTOPILOT'],
     ['ralph: fix the "알려줘" button', 'RALPH'],
     ['autopilot: build a button labelled "how to use"', 'AUTOPILOT'],
