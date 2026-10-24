@@ -1438,6 +1438,22 @@ describe('keyword-detector.mjs #4551 regression tests', () => {
     },
   );
 
+  it.each([
+    'ralph:\nExplain how this mode works',
+    'autopilot:\n如何使用',
+    'autopilot: 如何使用 build 命令',
+    'autopilot: build 사용법 알려줘',
+  ])('should keep a leading help request informational: %s', (prompt) => {
+    const output = runKeywordDetector(prompt, process.cwd(), 'test-4553-followup-help');
+    expect(output.continue).toBe(true);
+    expect(output.hookSpecificOutput).toBeUndefined();
+  });
+
+  it('should activate a bare prefix line followed by a command', () => {
+    const output = runKeywordDetector('ralph:\nfix the login bug', process.cwd(), 'test-4553-followup-fix');
+    expect(output.hookSpecificOutput?.additionalContext).toContain('[MAGIC KEYWORD: RALPH]');
+  });
+
   it('should keep a leading invocation actionable when its task text contains a help word', () => {
     const output = runKeywordDetector('ralph: fix 説明文の誤字', process.cwd(), 'test-4553-fix');
     expect(output.hookSpecificOutput?.additionalContext).toContain('[MAGIC KEYWORD: RALPH]');

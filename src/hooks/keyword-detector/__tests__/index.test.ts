@@ -536,6 +536,17 @@ Final draft.`);
         expect(detectKeywordsWithType('autopilot: 解释一下')).toEqual([]);
       });
 
+      it('should judge a bare prefix line by the next request line', () => {
+        expect(detectKeywordsWithType('ralph:\nExplain how this mode works')).toEqual([]);
+        expect(detectKeywordsWithType('autopilot:\n如何使用')).toEqual([]);
+        expect(detectKeywordsWithType('ralph:\nfix the login bug').find((r) => r.type === 'ralph')).toBeDefined();
+      });
+
+      it('should keep multilingual help requests that mention a command word informational', () => {
+        expect(detectKeywordsWithType('autopilot: 如何使用 build 命令')).toEqual([]);
+        expect(detectKeywordsWithType('autopilot: build 사용법 알려줘')).toEqual([]);
+      });
+
       it('should keep a leading invocation actionable when its task text contains a help word', () => {
         expect(detectKeywordsWithType('ralph: fix 説明文の誤字').find((r) => r.type === 'ralph')).toBeDefined();
         expect(detectKeywordsWithType('ralph fix 説明文の誤字').find((r) => r.type === 'ralph')).toBeDefined();

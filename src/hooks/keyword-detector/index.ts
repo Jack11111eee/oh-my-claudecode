@@ -400,6 +400,10 @@ const INFORMATIONAL_INTENT_PATTERNS: RegExp[] = [
 ];
 const STRONG_HELP_QUERY_PATTERN =
   /\?|？|\b(?:how\s+(?:to|do\s+i)\s+use|what(?:'s|\s+is)|explain|describe|tell\s+me\s+about)\b|(?:사용법|使い方|什么是|怎么用|如何使用)/iu;
+// Help-request constructions ("tell me", "how to use", "what is") rather than
+// bare nouns, so a command that mentions a help word stays actionable.
+const MULTILINGUAL_HELP_REQUEST_PATTERN =
+  /(?:알려\s?줘|알려줄래|설명해\s?줘|사용법|뭐야|뭔데|어떻게\s*(?:써|쓰|사용)|教えて|説明して|使い方|とは|って何|如何使用|怎(?:么|樣)用|是什么|什么是|คืออะไร|ใช้(?:งาน)?ยังไง|ใช้(?:งาน)?อย่างไร)/u;
 const INFORMATIONAL_CONTEXT_WINDOW = 80;
 const QUOTED_SPAN_PATTERN =
   /"[^"\n]{1,400}"|'[^'\n]{1,400}'|“[^”\n]{1,400}”|‘[^’\n]{1,400}’/g;
@@ -636,10 +640,21 @@ function isAutopilotCreationAlias(keywordText: string): boolean {
 
 function hasActionableCommandAfterSeparator(text: string, position: number, keywordLength: number): boolean {
   const suffix = text.slice(position + keywordLength).match(/^\s*[:：]\s*([^\n]{0,80})/u)?.[1] ?? '';
-  if (/\?|？|\b(?:what(?:'s|\s+is)|how\s+(?:to|do\s+i)\s+use|explain|describe|tell\s+me\s+about)\b/iu.test(suffix)) {
+  if (
+    /\?|？|\b(?:what(?:'s|\s+is)|how\s+(?:to|do\s+i)\s+use|explain|describe|tell\s+me\s+about)\b/iu.test(suffix) ||
+    MULTILINGUAL_HELP_REQUEST_PATTERN.test(suffix)
+  ) {
     return false;
   }
   return /\b(?:fix|debug|investigate|resolve|handle|patch|address|implement|build|create|make|run|start|enable|activate|invoke|trigger|launch)\b|(?:ทำ|ทํา|สร้าง|แก้|เปิด|รัน|เรียก|เริ่ม)/iu.test(suffix);
+}
+
+function getLeadingRequestLine(text: string, position: number, keywordLength: number, line: string): string {
+  const [sameLine, ...rest] = text.slice(position + keywordLength).replace(/^[^\S\n]*[:：]?/u, '').split('\n');
+  if (sameLine.trim()) {
+    return line;
+  }
+  return rest.find((candidate) => candidate.trim()) ?? line;
 }
 
 function isInformationalKeywordContext(text: string, position: number, keywordLength: number, keywordText?: string): boolean {
@@ -711,9 +726,11 @@ function isInformationalKeywordContext(text: string, position: number, keywordLe
     }
     // English help needs a help-query construction on the line, so task
     // objects such as "update the explanation" stay actionable; the other
-    // languages keep their dedicated informational phrasing patterns.
-    return INFORMATIONAL_INTENT_PATTERNS.slice(1).some((pattern) => pattern.test(line)) ||
-      (INFORMATIONAL_INTENT_PATTERNS[0].test(line) && STRONG_HELP_QUERY_PATTERN.test(line));
+    // languages keep their dedicated informational phrasing patterns. A bare
+    // prefix line is judged by the first nonempty request line after it.
+    const requestLine = getLeadingRequestLine(text, position, keywordLength, line);
+    return INFORMATIONAL_INTENT_PATTERNS.slice(1).some((pattern) => pattern.test(requestLine)) ||
+      (INFORMATIONAL_INTENT_PATTERNS[0].test(requestLine) && STRONG_HELP_QUERY_PATTERN.test(requestLine));
   }
 
   if (keywordText) {
