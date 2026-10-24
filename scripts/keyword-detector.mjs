@@ -408,13 +408,13 @@ const INFORMATIONAL_INTENT_PATTERNS = [
   /(?:ทำไม|อะไร|ยังไง|อย่างไร|คืออะไร|หมายถึง|แปลว่า|อธิบาย|มั้ย|ไหม|เหรอ|หรอ|หรือไม่|หรือเปล่า|ใช่ไหม|ถูกมั้ย|เกี่ยวกับ|เหมือน)/u,
 ];
 const STRONG_HELP_QUERY_PATTERN =
-  /\?|？|\b(?:how\s+(?:to|do\s+i)\s+use|what(?:'s|\s+is)|explain|describe|tell\s+me\s+about)\b|(?:사용법|使い方|什么是|怎么用|如何使用)/iu;
+  /\?|？|\b(?:how\s+(?:to|do\s+i)\s+use|what(?:'s|\s+is)|what\s+are|explain|describe|tell\s+me\s+about)\b|(?:사용법|使い方|什么是|怎么用|如何使用)/iu;
 // Help-request constructions ("tell me", "how to use", "what is"), not bare
 // help terms or particles such as 사용법, 使い方, or とは, keep task objects actionable.
 const MULTILINGUAL_HELP_REQUEST_PATTERN =
   /(?:알려\s?줘|알려줄래|설명해\s?줘|뭐야|뭔데|어떻게\s*(?:써|쓰|사용)|教えて|説明して|って何|如何使用|怎(?:么|樣)用|是什么|什么是|คืออะไร|ใช้(?:งาน)?ยังไง|ใช้(?:งาน)?อย่างไร)/u;
 const ENGLISH_HELP_REQUEST_PATTERN =
-  /\b(?:what(?:'s|\s+is)|how\s+(?:to|do\s+i)\s+use|explain|describe|tell\s+me\s+about)\b/iu;
+  /\b(?:what(?:'s|\s+is)|what\s+are|how\s+(?:to|do\s+i)\s+use|explain|describe|tell\s+me\s+about)\b/iu;
 const TASK_ACTION_VERB_PATTERN =
   /\b(?:fix|debug|investigate|resolve|handle|patch|address|implement|build|create|make|run|start|enable|activate|invoke|trigger|launch)\b|(?:ทำ|ทํา|สร้าง|แก้|เปิด|รัน|เรียก|เริ่ม|만들어줘|만들어|생성해|추가해|수정해|편집해|작성해|구현해|고쳐(?:줘)?|실행해|作成して|作って|修正して|直して|追加して|実装して|更新して|実行して|创建|生成|修复|修改|构建|实现|执行)/iu;
 const RESULTS_REPORTING_REQUEST_PATTERN =
@@ -757,7 +757,7 @@ function hasResultsReportingRequestAfterAction(text) {
 
 function hasActionableRequestLine(text) {
   const taskText = stripQuotedSpans(text);
-  if (!TASK_ACTION_VERB_PATTERN.test(taskText)) return false;
+  if (/\?|？/u.test(taskText) || !TASK_ACTION_VERB_PATTERN.test(taskText)) return false;
   const hasHelpRequest = ENGLISH_HELP_REQUEST_PATTERN.test(taskText) || MULTILINGUAL_HELP_REQUEST_PATTERN.test(taskText);
   return !hasHelpRequest || hasResultsReportingRequestAfterAction(taskText);
 }

@@ -549,6 +549,9 @@ Final draft.`);
         expect(detectKeywordsWithType('autopilot: 如何使用 build 命令')).toEqual([]);
         expect(detectKeywordsWithType('autopilot: build 사용법 알려줘')).toEqual([]);
         expect(detectKeywordsWithType('autopilot: とは')).toEqual([]);
+        expect(detectKeywordsWithType('autopilot: what are the build options?')).toEqual([]);
+        expect(detectKeywordsWithType('ralph: what are the results of the last run?')).toEqual([]);
+        expect(detectKeywordsWithType('autopilot: what are the build options')).toEqual([]);
       });
 
       it('should keep a leading invocation actionable despite help-looking task text', () => {

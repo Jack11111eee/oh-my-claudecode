@@ -1445,6 +1445,9 @@ describe('keyword-detector.mjs #4551 regression tests', () => {
     'autopilot: 如何使用 build 命令',
     'autopilot: build 사용법 알려줘',
     'autopilot: とは',
+    'autopilot: what are the build options?',
+    'ralph: what are the results of the last run?',
+    'autopilot: what are the build options',
   ])('should keep a leading help request informational: %s', (prompt) => {
     for (const detectorPath of [SCRIPT_PATH, TEMPLATE_PATH]) {
       const output = runKeywordDetector(prompt, process.cwd(), 'test-4553-followup-help', {}, detectorPath);
