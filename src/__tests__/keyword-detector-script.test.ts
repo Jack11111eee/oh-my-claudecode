@@ -1441,6 +1441,7 @@ describe('keyword-detector.mjs #4551 regression tests', () => {
   it.each([
     'ralph:\nExplain how this mode works',
     'autopilot:\n如何使用',
+    'autopilot:\nbuild 사용법 알려줘',
     'autopilot: 如何使用 build 命令',
     'autopilot: build 사용법 알려줘',
     'autopilot: とは',
@@ -1466,6 +1467,10 @@ describe('keyword-detector.mjs #4551 regression tests', () => {
     ['autopilot: build 사용법 페이지', 'AUTOPILOT'],
     ['ralph: fix 使い方ページの誤字', 'RALPH'],
     ['ralph: fix the login bug; あとはテストを実行して', 'RALPH'],
+    ['autopilot:\n사용법 페이지를 만들어줘', 'AUTOPILOT'],
+    ['ralph:\n使い方ページの誤字を修正して', 'RALPH'],
+    ['ralph: fix the login bug; 결과 알려줘', 'RALPH'],
+    ['ralph: fix the login bug; 変更内容を説明して', 'RALPH'],
   ])('should keep a leading command actionable when its task contains a help noun: %s', (prompt, mode) => {
     for (const detectorPath of [SCRIPT_PATH, TEMPLATE_PATH]) {
       const output = runKeywordDetector(prompt, process.cwd(), `test-4564-help-noun-${mode}`, {}, detectorPath);

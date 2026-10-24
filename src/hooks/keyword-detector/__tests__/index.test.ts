@@ -539,6 +539,9 @@ Final draft.`);
       it('should judge a bare prefix line by the next request line', () => {
         expect(detectKeywordsWithType('ralph:\nExplain how this mode works')).toEqual([]);
         expect(detectKeywordsWithType('autopilot:\n如何使用')).toEqual([]);
+        expect(detectKeywordsWithType('autopilot:\nbuild 사용법 알려줘')).toEqual([]);
+        expect(detectKeywordsWithType('autopilot:\n사용법 페이지를 만들어줘').find((r) => r.type === 'autopilot')).toBeDefined();
+        expect(detectKeywordsWithType('ralph:\n使い方ページの誤字を修正して').find((r) => r.type === 'ralph')).toBeDefined();
         expect(detectKeywordsWithType('ralph:\nfix the login bug').find((r) => r.type === 'ralph')).toBeDefined();
       });
 
@@ -553,6 +556,8 @@ Final draft.`);
         expect(detectKeywordsWithType('autopilot: build 사용법 페이지').find((r) => r.type === 'autopilot')).toBeDefined();
         expect(detectKeywordsWithType('ralph: fix 使い方ページの誤字').find((r) => r.type === 'ralph')).toBeDefined();
         expect(detectKeywordsWithType('ralph: fix the login bug; あとはテストを実行して').find((r) => r.type === 'ralph')).toBeDefined();
+        expect(detectKeywordsWithType('ralph: fix the login bug; 결과 알려줘').find((r) => r.type === 'ralph')).toBeDefined();
+        expect(detectKeywordsWithType('ralph: fix the login bug; 変更内容を説明して').find((r) => r.type === 'ralph')).toBeDefined();
         expect(detectKeywordsWithType('ralph fix 説明文の誤字').find((r) => r.type === 'ralph')).toBeDefined();
         expect(detectKeywordsWithType('autopilot build a 说明 component').find((r) => r.type === 'autopilot')).toBeDefined();
         expect(detectKeywordsWithType('ralph: update the explanation in README').find((r) => r.type === 'ralph')).toBeDefined();
