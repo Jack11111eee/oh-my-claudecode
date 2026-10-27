@@ -62,6 +62,7 @@ const mockedCheckNodeVersion = vi.mocked(checkNodeVersion);
 const originalPlatformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform');
 const originalGhToken = process.env.GH_TOKEN;
 const originalGithubToken = process.env.GITHUB_TOKEN;
+const originalPluginCacheSynced = process.env.OMC_UPDATE_PLUGIN_CACHE_SYNCED;
 
 function mockPlatform(platform: NodeJS.Platform): void {
   Object.defineProperty(process, 'platform', {
@@ -75,6 +76,7 @@ describe('auto-update reconciliation', () => {
     vi.clearAllMocks();
     delete process.env.GH_TOKEN;
     delete process.env.GITHUB_TOKEN;
+    delete process.env.OMC_UPDATE_PLUGIN_CACHE_SYNCED;
     mockedCpSync.mockImplementation(() => undefined);
     mockedExistsSync.mockReturnValue(true);
     mockedIsProjectScopedPlugin.mockReturnValue(false);
@@ -134,6 +136,11 @@ describe('auto-update reconciliation', () => {
     vi.unstubAllGlobals();
     delete process.env.OMC_UPDATE_RECONCILE;
     delete process.env.CLAUDE_PLUGIN_ROOT;
+    if (originalPluginCacheSynced === undefined) {
+      delete process.env.OMC_UPDATE_PLUGIN_CACHE_SYNCED;
+    } else {
+      process.env.OMC_UPDATE_PLUGIN_CACHE_SYNCED = originalPluginCacheSynced;
+    }
     if (originalGhToken === undefined) {
       delete process.env.GH_TOKEN;
     } else {
@@ -707,7 +714,7 @@ describe('auto-update reconciliation', () => {
 
     const result = syncPluginCache();
 
-    expect(result).toEqual({ synced: true, skipped: false, errors: [] });
+    expect(result).toEqual({ synced: true, skipped: false, activeRootsSynced: false, errors: [] });
     expect(mockedExecSync).toHaveBeenCalledWith('npm root -g', expect.objectContaining({
       encoding: 'utf-8',
       stdio: 'pipe',
@@ -747,7 +754,7 @@ describe('auto-update reconciliation', () => {
 
     const result = syncPluginCache();
 
-    expect(result).toEqual({ synced: false, skipped: true, errors: [] });
+    expect(result).toEqual({ synced: false, skipped: true, activeRootsSynced: false, errors: [] });
     expect(mockedExecSync).not.toHaveBeenCalledWith('npm root -g', expect.anything());
     expect(mockedCpSync).not.toHaveBeenCalled();
   });
