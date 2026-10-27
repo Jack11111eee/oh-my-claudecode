@@ -36415,6 +36415,62 @@
       ]
     },
     {
+      "pullNumber": 4620,
+      "targetRef": "main",
+      "mergeBaseSha": "a382cc730e575c85887c8fb8b8d60ca3b19cd0da",
+      "headSha": "306901c004f74098f702c135f9d8df62c7af4aff",
+      "owner": "Yeachan-Heo",
+      "expiresAt": "2026-11-25T00:00:00.000Z",
+      "generatedDelta": {
+        "count": 7,
+        "sha256": "6012d14ff273f56a51a674ceac94483c8fa99fe0b6e776e97e9b53f1ce7e61e7"
+      },
+      "generatedFiles": [
+        {
+          "status": "modified",
+          "filename": "bridge/claude-md-coordinator.cjs",
+          "sha": "00e1161df64fa2c0f5ec6ef80104543c26eb6386",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "bridge/runtime-cli.cjs",
+          "sha": "fd04f702254d165651324a7788b26593b7fec0ed",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/team/__tests__/runtime-cli.test.js",
+          "sha": "16d68c697854cc6e67fc0d7a2b97895532841eb9",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/team/__tests__/runtime-cli.test.js.map",
+          "sha": "8e91ea57042e6da7d00a18fb9fd24d434489f362",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/team/runtime-cli.d.ts.map",
+          "sha": "62bf64853f4ed88e3803ca44426918da81c7c0ef",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/team/runtime-cli.js",
+          "sha": "6521f421c63cd59a8561532ff504f0d2b0334de9",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/team/runtime-cli.js.map",
+          "sha": "a64ac5f6913aed4ca66f825f2fa2a6a1c2601bd1",
+          "previousFilename": null
+        }
+      ]
+    },
+    {
       "pullNumber": 4623,
       "targetRef": "dev",
       "mergeBaseSha": "d98c2a1a9c04ebfbe96cd5e4ea9f748e52fab566",
@@ -36466,6 +36522,80 @@
           "status": "modified",
           "filename": "dist/team/runtime-cli.js.map",
           "sha": "a64ac5f6913aed4ca66f825f2fa2a6a1c2601bd1",
+          "previousFilename": null
+        }
+      ]
+    },
+    {
+      "pullNumber": 4626,
+      "targetRef": "main",
+      "mergeBaseSha": "726fa45e081a65f8e971ef291dbf0d9cecf24897",
+      "headSha": "5131db6f8a5f932460895ede7baa22f4a54bb9ab",
+      "owner": "Yeachan-Heo",
+      "expiresAt": "2026-11-26T00:00:00.000Z",
+      "generatedDelta": {
+        "count": 10,
+        "sha256": "fa350b53806e2ff0731f072ee124e76e57b0fb73a5fe87ac64c3d0103e71fb06"
+      },
+      "generatedFiles": [
+        {
+          "status": "modified",
+          "filename": "bridge/claude-md-coordinator.cjs",
+          "sha": "8dd5d200c3268a3aec02f801dcfeb4f55db2177b",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "bridge/cli.cjs",
+          "sha": "87ea2cd6fa6752194d603bfc2e374353519fa7e4",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "bridge/runtime-cli.cjs",
+          "sha": "b2aa8d9a1112edc8ce939014310848f3cb17fa91",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "bridge/team-mcp.cjs",
+          "sha": "c95ea4c86fa58b699ff02bad783403daf86d0df6",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "bridge/team.js",
+          "sha": "5ef922114326aa0cb8bb199dde56427d01133ae2",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/team/__tests__/worker-launch-ack.test.js",
+          "sha": "193492c4021841e709686ba15e8f208e7cb006ec",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/team/__tests__/worker-launch-ack.test.js.map",
+          "sha": "5ea5a01253ba51d596651e10845007970d0397eb",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/team/worker-launch-ack.d.ts.map",
+          "sha": "85f1b79517a25265dc97dbb26a83ac285b95b55f",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/team/worker-launch-ack.js",
+          "sha": "d400bdfd45d550b126d2abec1890966d484c306f",
+          "previousFilename": null
+        },
+        {
+          "status": "modified",
+          "filename": "dist/team/worker-launch-ack.js.map",
+          "sha": "4fe64d1d16ebcf257ec19aa28a9f657ea4da639a",
           "previousFilename": null
         }
       ]
