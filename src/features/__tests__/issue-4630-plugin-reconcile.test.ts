@@ -114,7 +114,11 @@ describe("issue #4630 plugin payload reconciliation", () => {
     delete process.env.OMC_UPDATE_PLUGIN_CACHE_SYNCED;
 
     mkdirSync(dirname(sourceRoot), { recursive: true });
-    symlinkSync(process.cwd(), sourceRoot, process.platform === "win32" ? "junction" : "dir");
+    symlinkSync(
+      process.cwd(),
+      sourceRoot,
+      process.platform === "win32" ? "junction" : "dir",
+    );
     const oldRoot = join(
       configDir,
       "plugins",
@@ -146,10 +150,13 @@ describe("issue #4630 plugin payload reconciliation", () => {
       if (command.startsWith("which omc ")) return "/usr/bin/omc\n";
       throw new Error(`Unexpected command: ${command}`);
     });
-    instrumentation.execFileSync.mockImplementation((command: string, args?: readonly string[]) => {
-      if (command === "where.exe" && args?.[0] === "omc.cmd") return "C:\\omc.cmd\n";
-      return "";
-    });
+    instrumentation.execFileSync.mockImplementation(
+      (command: string, args?: readonly string[]) => {
+        if (command === "where.exe" && args?.[0] === "omc.cmd")
+          return "C:\\omc.cmd\n";
+        return "";
+      },
+    );
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -179,7 +186,8 @@ describe("issue #4630 plugin payload reconciliation", () => {
     const result = await performUpdate({ verbose: false });
     expect(result.success, JSON.stringify(result)).toBe(true);
     const reconcileCall = instrumentation.execFileSync.mock.calls.find(
-      ([, args]) => (args as readonly string[] | undefined)?.[0] === "update-reconcile",
+      ([, args]) =>
+        (args as readonly string[] | undefined)?.[0] === "update-reconcile",
     );
     const childEnv = reconcileCall?.[2]?.env as NodeJS.ProcessEnv | undefined;
     expect(childEnv?.OMC_UPDATE_PLUGIN_CACHE_SYNCED).toBe("1");
@@ -246,6 +254,83 @@ describe("issue #4630 plugin payload reconciliation", () => {
         elapsedMs: Number(elapsedMs.toFixed(1)),
       }),
     );
+  });
+
+  it("repairs an unmatched active cache root before reconciliation skips payload sync", async () => {
+    const unmatchedRoot = join(
+      configDir,
+      "plugins",
+      "cache",
+      "omc",
+      "oh-my-claudecode",
+      "old-version",
+    );
+    writeFile(
+      join(unmatchedRoot, "bridge", "claude-md-coordinator.cjs"),
+      "stale\n",
+    );
+    writeFile(
+      join(configDir, "plugins", "installed_plugins.json"),
+      JSON.stringify(
+        {
+          version: 2,
+          plugins: {
+            "oh-my-claudecode@omc": [
+              { installPath: unmatchedRoot, version: "old-version" },
+            ],
+            "oh-my-claudecode@oh-my-claudecode": [
+              { installPath: unmatchedRoot, version: "old-version" },
+            ],
+          },
+        },
+        null,
+        2,
+      ),
+    );
+
+    const { performUpdate, reconcileUpdateRuntime, syncPluginCache } =
+      await import("../auto-update.js");
+    const cacheSyncResult = syncPluginCache(false);
+
+    expect(cacheSyncResult.synced).toBe(true);
+    expect(cacheSyncResult.errors).toEqual([]);
+    expect(cacheSyncResult.activeRootsSynced).toBe(false);
+
+    const updateResult = await performUpdate({ verbose: false });
+    expect(updateResult.success, JSON.stringify(updateResult)).toBe(true);
+    const reconcileCall = instrumentation.execFileSync.mock.calls.find(
+      ([, args]) =>
+        (args as readonly string[] | undefined)?.[0] === "update-reconcile",
+    );
+    const childEnv = reconcileCall?.[2]?.env as NodeJS.ProcessEnv | undefined;
+    expect(childEnv?.OMC_UPDATE_PLUGIN_CACHE_SYNCED).toBe("0");
+
+    process.env.OMC_UPDATE_PLUGIN_CACHE_SYNCED =
+      childEnv?.OMC_UPDATE_PLUGIN_CACHE_SYNCED ?? "1";
+    const reconcileResult = reconcileUpdateRuntime({ verbose: false });
+    const installer = await import("../../installer/index.js");
+
+    expect(reconcileResult.success).toBe(true);
+    expect(
+      readFileSync(
+        join(unmatchedRoot, "bridge", "claude-md-coordinator.cjs"),
+        "utf-8",
+      ),
+    ).toBe(
+      readFileSync(
+        join(sourceRoot, "bridge", "claude-md-coordinator.cjs"),
+        "utf-8",
+      ),
+    );
+    expect(instrumentation.cpSyncCalls).toContainEqual(
+      expect.objectContaining({
+        destination: join(unmatchedRoot, "bridge"),
+      }),
+    );
+    expect(installer.validatePluginCachePayload(unmatchedRoot)).toEqual({
+      valid: true,
+      errors: [],
+    });
   });
 
   it("repairs a damaged cache during direct reconciliation when setup skips an older package", async () => {
