@@ -394,6 +394,14 @@ describe('mission board state tracking', () => {
       missions: [],
     }));
 
+    // Malformed directory names must not be passed to session-scoped readers.
+    const invalidDir = join(sessionsRoot, 'invalid.session');
+    mkdirSync(invalidDir, { recursive: true });
+    writeFileSync(join(invalidDir, 'mission-state.json'), JSON.stringify({
+      updatedAt: '2026-03-09T10:00:00.000Z',
+      missions: [],
+    }));
+
     // Pin mtimes so ordering does not depend on filesystem timestamp resolution.
     utimesSync(join(sessionsRoot, older, 'mission-state.json'), new Date('2026-03-09T07:00:00Z'), new Date('2026-03-09T07:00:00Z'));
     utimesSync(join(sessionsRoot, newer, 'mission-state.json'), new Date('2026-03-09T08:00:00Z'), new Date('2026-03-09T08:00:00Z'));

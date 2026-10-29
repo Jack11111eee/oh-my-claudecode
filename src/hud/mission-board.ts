@@ -7,6 +7,7 @@ import {
   getProcessSessionId,
   isLegacyStateMigrationEnabled,
   resolveSessionStatePaths,
+  validateSessionId,
 } from '../lib/worktree-paths.js';
 import { truncateToWidth } from '../utils/string-width.js';
 import { canonicalizeWorkers } from '../team/worker-canonicalization.js';
@@ -602,6 +603,12 @@ export function listMissionBoardSessionIds(directory: string): string[] {
   const sessions: Array<{ sessionId: string; updatedAt: number }> = [];
   for (const entry of readdirSync(sessionsRoot, { withFileTypes: true })) {
     if (!entry.isDirectory() || entry.name.startsWith('pid-')) continue;
+    try {
+      validateSessionId(entry.name);
+    } catch {
+      // Ignore malformed directories rather than letting one break aggregation.
+      continue;
+    }
     const file = join(sessionsRoot, entry.name, 'mission-state.json');
     try {
       sessions.push({ sessionId: entry.name, updatedAt: statSync(file).mtimeMs });
